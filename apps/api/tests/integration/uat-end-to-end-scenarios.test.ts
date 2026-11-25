@@ -29,6 +29,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     role: Role.RECEPTIONIST,
     isActive: true,
     twoFactorEnabled: false,
+    twoFactorSecret: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -41,6 +42,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     role: Role.SUPER_ADMIN,
     isActive: true,
     twoFactorEnabled: false,
+    twoFactorSecret: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

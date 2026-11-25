@@ -20,26 +20,22 @@ export function PortalLoginForm({
   placeholderEmail = 'admin@clockin.workspace',
   redirectOnLogin = true,
 }: PortalLoginFormProps) {
-  const { login, verifyTwoFactorLogin, resendTwoFactorLogin, isLoading } = useAuth();
+  const { login, verifyTwoFactorLogin, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [challenge, setChallenge] = useState<TwoFactorChallenge | null>(null);
   const [code, setCode] = useState('');
-  const [resending, setResending] = useState(false);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handlePasswordSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
-    setInfoMessage(null);
 
     try {
       const outcome = await login(email, password, { redirect: redirectOnLogin });
       if (outcome.requiresTwoFactor) {
         setChallenge(outcome);
         setCode('');
-        setInfoMessage(`We sent a 6-digit verification code to ${outcome.maskedEmail}.`);
       }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password.');
@@ -50,30 +46,11 @@ export function PortalLoginForm({
     e.preventDefault();
     if (!challenge) return;
     setError(null);
-    setInfoMessage(null);
 
     try {
       await verifyTwoFactorLogin(challenge.challengeToken, code, { redirect: redirectOnLogin });
     } catch (err: any) {
-      setError(err.message || 'Invalid verification code.');
-    }
-  };
-
-  const handleResend = async () => {
-    if (!challenge) return;
-    setError(null);
-    setInfoMessage(null);
-    setResending(true);
-
-    try {
-      const refreshed = await resendTwoFactorLogin(challenge.challengeToken);
-      setChallenge(refreshed);
-      setCode('');
-      setInfoMessage(`A new verification code was sent to ${refreshed.maskedEmail}.`);
-    } catch (err: any) {
-      setError(err.message || 'Failed to resend code.');
-    } finally {
-      setResending(false);
+      setError(err.message || 'Invalid Google Authenticator code.');
     }
   };
 
@@ -82,7 +59,6 @@ export function PortalLoginForm({
     setCode('');
     setPassword('');
     setError(null);
-    setInfoMessage(null);
   };
 
   return (
@@ -98,7 +74,7 @@ export function PortalLoginForm({
               {HUB_NAME.toUpperCase()}
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
-              {challenge ? 'Two-Factor Verification' : title}
+              {challenge ? 'Google Authenticator' : title}
             </h1>
           </div>
         </div>
@@ -147,19 +123,10 @@ export function PortalLoginForm({
               <div className="flex items-start gap-3 p-3.5 rounded-xl bg-[#EEF3F7] border border-[#DCE6EE]">
                 <ShieldCheck className="w-5 h-5 text-[#34526E] flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-[#1E3A54] leading-relaxed">
-                  {infoMessage ||
-                    `Enter the 6-digit verification code sent to ${challenge.maskedEmail}.`}
+                  Open <strong>Google Authenticator</strong> on your phone and enter the 6-digit
+                  code for your account.
                 </div>
               </div>
-
-              {challenge.devPreviewCode && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                  Local dev preview (SMTP not configured): your code is{' '}
-                  <span className="font-mono font-bold tracking-widest">
-                    {challenge.devPreviewCode}
-                  </span>
-                </div>
-              )}
 
               {error && (
                 <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
@@ -169,7 +136,7 @@ export function PortalLoginForm({
 
               <form onSubmit={handleVerifyCode} className="space-y-4">
                 <Input
-                  label="6-Digit Verification Code"
+                  label="6-Digit Authenticator Code"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -191,19 +158,9 @@ export function PortalLoginForm({
                     &larr; Back
                   </button>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={handleResend}
-                      isLoading={resending}
-                    >
-                      {resending ? 'Sending...' : 'Resend'}
-                    </Button>
-                    <Button type="submit" isLoading={isLoading} disabled={code.length !== 6}>
-                      {isLoading ? 'Verifying...' : 'Verify'}
-                    </Button>
-                  </div>
+                  <Button type="submit" isLoading={isLoading} disabled={code.length !== 6}>
+                    {isLoading ? 'Verifying...' : 'Verify & Sign In'}
+                  </Button>
                 </div>
               </form>
             </>

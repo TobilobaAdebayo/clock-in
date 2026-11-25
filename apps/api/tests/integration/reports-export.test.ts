@@ -17,6 +17,7 @@ describe('Reports & Excel Export (M5 Integration)', () => {
     role: Role.RECEPTIONIST,
     isActive: true,
     twoFactorEnabled: false,
+    twoFactorSecret: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

@@ -1,12 +1,13 @@
 import { Staff, Role } from '@prisma/client';
 import { staffRepository, StaffRepository, StaffFilterCriteria } from './staff.repository.js';
 import { sessionRepository, SessionRepository } from '../auth/session.repository.js';
-import { twoFactorRepository, TwoFactorRepository } from '../auth/two-factor.repository.js';
 import { auditService, AuditService } from '../audit/audit.service.js';
 import { prisma } from '../../shared/db/prisma.js';
 import { hashPassword } from '../../shared/utils/crypto.js';
 import { ConflictError, NotFoundError, BadRequestError } from '../../shared/errors/app-error.js';
 import { PaginationParams, createPaginatedResponse, PaginatedResult } from '../../shared/utils/pagination.js';
+
+export type PublicStaff = Omit<Staff, 'passwordHash' | 'twoFactorSecret'>;
 
 export interface CreateStaffInput {
   fullName: string;
@@ -24,36 +25,36 @@ export interface UpdateStaffInput {
   isActive?: boolean;
 }
 
+const sanitizeStaff = (staff: Staff): PublicStaff => {
+  const { passwordHash: _passwordHash, twoFactorSecret: _twoFactorSecret, ...safe } = staff;
+  return safe;
+};
+
 export class StaffService {
   constructor(
     private staffRepo: StaffRepository = staffRepository,
     private sessionRepo: SessionRepository = sessionRepository,
     private audit: AuditService = auditService,
-    private twoFactorRepo: TwoFactorRepository = twoFactorRepository,
   ) {}
 
   async listStaff(
     criteria: StaffFilterCriteria,
     pagination: PaginationParams,
-  ): Promise<PaginatedResult<Omit<Staff, 'passwordHash'>>> {
+  ): Promise<PaginatedResult<PublicStaff>> {
     const { staff, total } = await this.staffRepo.findManyPaginated(criteria, pagination);
-    const sanitized = staff.map(({ passwordHash: _, ...rest }) => rest);
+    const sanitized = staff.map(sanitizeStaff);
     return createPaginatedResponse(sanitized, total, pagination.page, pagination.limit);
   }
 
-  async getStaffById(id: string): Promise<Omit<Staff, 'passwordHash'>> {
+  async getStaffById(id: string): Promise<PublicStaff> {
     const staff = await this.staffRepo.findById(id);
     if (!staff) {
       throw new NotFoundError('Staff account not found.');
     }
-    const { passwordHash: _, ...sanitized } = staff;
-    return sanitized;
+    return sanitizeStaff(staff);
   }
 
-  async createStaff(
-    input: CreateStaffInput,
-    actorId: string,
-  ): Promise<Omit<Staff, 'passwordHash'>> {
+  async createStaff(input: CreateStaffInput, actorId: string): Promise<PublicStaff> {
     const existing = await this.staffRepo.findByEmail(input.email);
     if (existing) {
       throw new ConflictError('A staff member with this email already exists.');
@@ -89,8 +90,7 @@ export class StaffService {
         tx,
       );
 
-      const { passwordHash: _, ...sanitized } = newStaff;
-      return sanitized;
+      return sanitizeStaff(newStaff);
     });
   }
 
@@ -98,7 +98,7 @@ export class StaffService {
     id: string,
     input: UpdateStaffInput,
     actorId: string,
-  ): Promise<Omit<Staff, 'passwordHash'>> {
+  ): Promise<PublicStaff> {
     const existing = await this.staffRepo.findById(id);
     if (!existing) {
       throw new NotFoundError('Staff account not found.');
@@ -112,7 +112,6 @@ export class StaffService {
     }
 
     return prisma.$transaction(async (tx) => {
-      // Guard: Cannot deactivate or demote the last active Super Admin (FR-16)
       const isDemotingOrDeactivating =
         existing.role === Role.SUPER_ADMIN &&
         ((input.role && input.role !== Role.SUPER_ADMIN) || input.isActive === false);
@@ -135,7 +134,6 @@ export class StaffService {
 
       const updated = await this.staffRepo.update(id, updateData, tx);
 
-      // If deactivated, revoke all active sessions immediately
       if (input.isActive === false) {
         await this.sessionRepo.revokeAllForStaff(id, tx);
       }
@@ -162,27 +160,29 @@ export class StaffService {
         tx,
       );
 
-      const { passwordHash: _, ...sanitized } = updated;
-      return sanitized;
+      return sanitizeStaff(updated);
     });
   }
 
-  async deactivateStaff(id: string, actorId: string): Promise<Omit<Staff, 'passwordHash'>> {
+  async deactivateStaff(id: string, actorId: string): Promise<PublicStaff> {
     return this.updateStaff(id, { isActive: false }, actorId);
   }
 
   /**
-   * Super Admin recovery action: resets/disables Email 2FA on a staff account.
+   * Super Admin recovery action: resets/disables Google Authenticator 2FA on a staff account.
    */
-  async resetTwoFactor(id: string, actorId: string): Promise<Omit<Staff, 'passwordHash'>> {
+  async resetTwoFactor(id: string, actorId: string): Promise<PublicStaff> {
     const existing = await this.staffRepo.findById(id);
     if (!existing) {
       throw new NotFoundError('Staff account not found.');
     }
 
     return prisma.$transaction(async (tx) => {
-      const updated = await this.staffRepo.update(id, { twoFactorEnabled: false }, tx);
-      await this.twoFactorRepo.invalidatePendingForStaff(id, undefined, tx);
+      const updated = await this.staffRepo.update(
+        id,
+        { twoFactorEnabled: false, twoFactorSecret: null },
+        tx,
+      );
 
       await this.audit.record(
         {
@@ -196,8 +196,7 @@ export class StaffService {
         tx,
       );
 
-      const { passwordHash: _, ...sanitized } = updated;
-      return sanitized;
+      return sanitizeStaff(updated);
     });
   }
 }

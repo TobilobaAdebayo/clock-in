@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, ShieldOff } from 'lucide-react';
+import { Check, Copy, ShieldCheck, ShieldOff } from 'lucide-react';
 import { apiClient } from '../../lib/api-client';
 import { useAuth } from '../../lib/auth-context';
 import { PageHeader } from '../layout';
 import { Badge, Button, Card, Input } from '../ui';
 
-interface EnableStartData {
-  challengeToken: string;
-  maskedEmail: string;
-  expiresInSeconds: number;
-  devPreviewCode?: string;
+interface TotpSetupData {
+  setupToken: string;
+  qrCodeDataUrl: string;
+  manualEntryKey: string;
+  issuer: string;
+  accountName: string;
 }
 
 export function SecurityView() {
@@ -19,9 +20,10 @@ export function SecurityView() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(Boolean(user?.twoFactorEnabled));
   const [loadingProfile, setLoadingProfile] = useState(true);
 
-  // Enable flow
-  const [pendingEnable, setPendingEnable] = useState<EnableStartData | null>(null);
+  // Setup flow
+  const [setupData, setSetupData] = useState<TotpSetupData | null>(null);
   const [code, setCode] = useState('');
+  const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Disable flow
@@ -53,49 +55,59 @@ export function SecurityView() {
     };
   }, []);
 
-  const handleStartEnable = async () => {
+  const handleStartSetup = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setSubmitting(true);
 
     try {
-      const res = await apiClient<EnableStartData>('/api/v1/auth/2fa/enable/start', {
+      const res = await apiClient<TotpSetupData>('/api/v1/auth/2fa/setup', {
         method: 'POST',
       });
       if (res.data) {
-        setPendingEnable(res.data);
+        setSetupData(res.data);
         setCode('');
-        setSuccessMessage(`A 6-digit verification code has been sent to ${res.data.maskedEmail}.`);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to send verification code.');
+      setErrorMessage(err.message || 'Failed to start Google Authenticator setup.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleConfirmEnable = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  const handleCopyKey = async () => {
+    if (!setupData) return;
+    try {
+      await navigator.clipboard.writeText(setupData.manualEntryKey.replace(/\s+/g, ''));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable
+    }
+  };
+
+  const handleConfirmSetup = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!pendingEnable) return;
+    if (!setupData) return;
     setErrorMessage(null);
     setSuccessMessage(null);
     setSubmitting(true);
 
     try {
-      await apiClient('/api/v1/auth/2fa/enable/confirm', {
+      await apiClient('/api/v1/auth/2fa/enable', {
         method: 'POST',
         body: JSON.stringify({
-          challengeToken: pendingEnable.challengeToken,
+          setupToken: setupData.setupToken,
           code: code.trim(),
         }),
       });
       setTwoFactorEnabled(true);
       updateUser({ twoFactorEnabled: true });
-      setPendingEnable(null);
+      setSetupData(null);
       setCode('');
-      setSuccessMessage('Two-factor authentication is now enabled on your account.');
+      setSuccessMessage('Google Authenticator 2FA is now enabled on your account.');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to verify code.');
+      setErrorMessage(err.message || 'Invalid 6-digit code. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +141,7 @@ export function SecurityView() {
       <PageHeader
         eyebrow="DARE ADEBOYE INNOVATION HUB"
         title="Security (2FA)"
-        description="Manage email two-factor authentication for your account."
+        description="Protect your account with Google Authenticator."
       />
 
       {errorMessage && (
@@ -156,7 +168,7 @@ export function SecurityView() {
             </div>
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-base font-bold text-[#111827]">Email Verification Code</h2>
+                <h2 className="text-base font-bold text-[#111827]">Google Authenticator</h2>
                 {loadingProfile ? (
                   <Badge tone="neutral">Checking...</Badge>
                 ) : twoFactorEnabled ? (
@@ -166,15 +178,14 @@ export function SecurityView() {
                 )}
               </div>
               <p className="text-xs text-[#6B7A8C] mt-1">
-                When enabled, signing in requires a 6-digit code sent to{' '}
-                <span className="font-medium text-[#1F2937]">{user?.email}</span>.
+                When enabled, signing in requires a 6-digit code from Google Authenticator.
               </p>
             </div>
           </div>
 
-          {!loadingProfile && !twoFactorEnabled && !pendingEnable && (
-            <Button onClick={handleStartEnable} isLoading={submitting}>
-              {submitting ? 'Sending...' : 'Enable 2FA'}
+          {!loadingProfile && !twoFactorEnabled && !setupData && (
+            <Button onClick={handleStartSetup} isLoading={submitting}>
+              {submitting ? 'Preparing...' : 'Set Up 2FA'}
             </Button>
           )}
 
@@ -192,55 +203,82 @@ export function SecurityView() {
           )}
         </div>
 
-        {/* Pending Enable Verification Form */}
-        {pendingEnable && (
-          <form onSubmit={handleConfirmEnable} className="space-y-4">
-            <p className="text-sm text-[#475569]">
-              Enter the 6-digit code sent to{' '}
-              <span className="font-semibold text-[#111827]">{pendingEnable.maskedEmail}</span> to
-              finish turning on 2FA.
-            </p>
-
-            {pendingEnable.devPreviewCode && (
-              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
-                Local dev preview (SMTP not configured): your code is{' '}
-                <span className="font-mono font-bold tracking-widest">
-                  {pendingEnable.devPreviewCode}
-                </span>
+        {/* QR Code Setup Flow */}
+        {setupData && (
+          <form onSubmit={handleConfirmSetup} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-6 items-center p-5 rounded-2xl bg-[#F9FBFC] border border-[#E6ECF2]">
+              <div className="bg-white p-3 rounded-xl border border-[#DCE3EB] inline-flex justify-center mx-auto">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={setupData.qrCodeDataUrl}
+                  alt="Google Authenticator QR Code"
+                  width={180}
+                  height={180}
+                  className="w-44 h-44"
+                />
               </div>
-            )}
 
-            <Input
-              label="6-Digit Verification Code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              required
-              autoFocus
-              placeholder="000000"
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="max-w-xs text-center font-mono text-xl tracking-[0.35em]"
-            />
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-[#34526E]">
+                    Step 1: Scan QR Code
+                  </div>
+                  <p className="text-sm text-[#475569] mt-1 leading-relaxed">
+                    Open <strong>Google Authenticator</strong>, tap <strong>+</strong> →{' '}
+                    <strong>Scan a QR code</strong>, and scan this code.
+                  </p>
+                </div>
+
+                <div>
+                  <div className="text-[11px] font-semibold text-[#6B7A8C] mb-1">
+                    Or enter setup key manually:
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2 bg-white border border-[#DCE3EB] rounded-lg text-xs font-mono font-semibold text-[#111827] tracking-wider select-all">
+                      {setupData.manualEntryKey}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={handleCopyKey}
+                      className="p-2 rounded-lg border border-[#DCE3EB] bg-white hover:bg-[#EEF3F7] text-[#34526E] transition"
+                      title="Copy setup key"
+                      aria-label="Copy setup key"
+                    >
+                      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-[#34526E]">
+                Step 2: Enter 6-Digit Code
+              </div>
+              <Input
+                label="Google Authenticator Code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                autoFocus
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="max-w-xs text-center font-mono text-xl tracking-[0.35em]"
+              />
+            </div>
 
             <div className="flex items-center gap-2.5 pt-2">
               <Button type="submit" isLoading={submitting} disabled={code.length !== 6}>
-                {submitting ? 'Verifying...' : 'Confirm & Enable'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleStartEnable}
-                disabled={submitting}
-              >
-                Resend Code
+                {submitting ? 'Verifying...' : 'Verify & Enable'}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => {
-                  setPendingEnable(null);
+                  setSetupData(null);
                   setCode('');
                   setErrorMessage(null);
                 }}
@@ -255,7 +293,7 @@ export function SecurityView() {
         {showDisableForm && twoFactorEnabled && (
           <form onSubmit={handleDisable} className="space-y-4">
             <p className="text-sm text-[#475569]">
-              Confirm your current password to turn off email two-factor authentication.
+              Confirm your current password to turn off Google Authenticator 2FA.
             </p>
 
             <Input

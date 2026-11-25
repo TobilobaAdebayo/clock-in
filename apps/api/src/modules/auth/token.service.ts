@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { Role, TwoFactorPurpose } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { env } from '../../config/env.js';
 import { generateToken, hashToken } from '../../shared/utils/crypto.js';
 
@@ -10,11 +10,15 @@ export interface AuthUserPayload {
   fullName: string;
 }
 
-export interface TwoFactorChallengePayload {
-  challengeId: string;
+export interface TotpLoginPayload {
   staffId: string;
-  purpose: TwoFactorPurpose;
-  scope: '2FA_CHALLENGE';
+  scope: 'TOTP_LOGIN';
+}
+
+export interface TotpSetupPayload {
+  staffId: string;
+  encryptedSecret: string;
+  scope: 'TOTP_SETUP';
 }
 
 export class TokenService {
@@ -32,7 +36,13 @@ export class TokenService {
    */
   verifyAccessToken(token: string): AuthUserPayload | null {
     try {
-      return jwt.verify(token, env.JWT_ACCESS_SECRET) as AuthUserPayload;
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as Partial<
+        AuthUserPayload & { scope?: string }
+      >;
+      if (decoded.scope || !decoded.staffId || !decoded.email || !decoded.role) {
+        return null;
+      }
+      return decoded as AuthUserPayload;
     } catch {
       return null;
     }
@@ -53,29 +63,48 @@ export class TokenService {
   }
 
   /**
-   * Generates a short-lived signed token bound to a 2FA email OTP challenge (10 minutes).
+   * Generates a short-lived signed token for the Google Authenticator login step (5 minutes).
    */
-  generateTwoFactorToken(payload: Omit<TwoFactorChallengePayload, 'scope'>): string {
-    return jwt.sign({ ...payload, scope: '2FA_CHALLENGE' }, env.JWT_ACCESS_SECRET, {
-      expiresIn: '10m',
+  generateTotpLoginToken(staffId: string): string {
+    return jwt.sign({ staffId, scope: 'TOTP_LOGIN' }, env.JWT_ACCESS_SECRET, {
+      expiresIn: '5m',
     });
   }
 
   /**
-   * Verifies a 2FA challenge token. Returns null if invalid, expired, or wrong scope.
+   * Verifies a Google Authenticator login challenge token.
    */
-  verifyTwoFactorToken(token: string): TwoFactorChallengePayload | null {
+  verifyTotpLoginToken(token: string): TotpLoginPayload | null {
     try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as Partial<TwoFactorChallengePayload>;
-      if (
-        decoded.scope !== '2FA_CHALLENGE' ||
-        !decoded.challengeId ||
-        !decoded.staffId ||
-        !decoded.purpose
-      ) {
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as Partial<TotpLoginPayload>;
+      if (decoded.scope !== 'TOTP_LOGIN' || !decoded.staffId) {
         return null;
       }
-      return decoded as TwoFactorChallengePayload;
+      return decoded as TotpLoginPayload;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Generates a signed setup token carrying the encrypted pending TOTP secret (15 minutes).
+   */
+  generateTotpSetupToken(staffId: string, encryptedSecret: string): string {
+    return jwt.sign({ staffId, encryptedSecret, scope: 'TOTP_SETUP' }, env.JWT_ACCESS_SECRET, {
+      expiresIn: '15m',
+    });
+  }
+
+  /**
+   * Verifies a Google Authenticator setup token.
+   */
+  verifyTotpSetupToken(token: string): TotpSetupPayload | null {
+    try {
+      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as Partial<TotpSetupPayload>;
+      if (decoded.scope !== 'TOTP_SETUP' || !decoded.staffId || !decoded.encryptedSecret) {
+        return null;
+      }
+      return decoded as TotpSetupPayload;
     } catch {
       return null;
     }

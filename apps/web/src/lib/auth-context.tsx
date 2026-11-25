@@ -14,9 +14,7 @@ export interface StaffUser {
 export interface TwoFactorChallenge {
   requiresTwoFactor: true;
   challengeToken: string;
-  maskedEmail: string;
   expiresInSeconds: number;
-  devPreviewCode?: string;
 }
 
 export type LoginOutcome =
@@ -38,7 +36,6 @@ interface AuthContextType {
     code: string,
     options?: { redirect?: boolean },
   ) => Promise<StaffUser>;
-  resendTwoFactorLogin: (challengeToken: string) => Promise<TwoFactorChallenge>;
   updateUser: (patch: Partial<StaffUser>) => void;
   logout: (redirectTo?: string) => Promise<void>;
   setToken: (token: string | null) => void;
@@ -119,9 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return {
           requiresTwoFactor: true,
           challengeToken: json.data.challengeToken,
-          maskedEmail: json.data.maskedEmail,
           expiresInSeconds: json.data.expiresInSeconds,
-          devPreviewCode: json.data.devPreviewCode,
         };
       }
 
@@ -172,28 +167,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resendTwoFactorLogin = async (challengeToken: string): Promise<TwoFactorChallenge> => {
-    const res = await fetch('/api/v1/auth/2fa/resend-login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ challengeToken }),
-    });
-
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      throw new Error(json.error?.message || 'Failed to resend verification code');
-    }
-
-    return {
-      requiresTwoFactor: true,
-      challengeToken: json.data.challengeToken,
-      maskedEmail: json.data.maskedEmail,
-      expiresInSeconds: json.data.expiresInSeconds,
-      devPreviewCode: json.data.devPreviewCode,
-    };
-  };
-
   const logout = async (redirectTo = '/staff-login') => {
     try {
       await fetch('/api/v1/auth/logout', {
@@ -219,7 +192,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         login,
         verifyTwoFactorLogin,
-        resendTwoFactorLogin,
         updateUser,
         logout,
         setToken,

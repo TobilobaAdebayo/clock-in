@@ -21,19 +21,16 @@ export class AuthController {
       if (result.requiresTwoFactor) {
         res.status(200).json({
           success: true,
-          message: 'Verification code sent to your email address.',
+          message: 'Enter the 6-digit code from Google Authenticator to finish signing in.',
           data: {
             requiresTwoFactor: true,
             challengeToken: result.challengeToken,
-            maskedEmail: result.maskedEmail,
             expiresInSeconds: result.expiresInSeconds,
-            ...(result.devPreviewCode ? { devPreviewCode: result.devPreviewCode } : {}),
           },
         });
         return;
       }
 
-      // Set rotating refresh token in httpOnly cookie
       res.cookie('refreshToken', result.refreshToken, getRefreshCookieOptions());
 
       res.status(200).json({
@@ -70,35 +67,14 @@ export class AuthController {
     }
   };
 
-  resendTwoFactorLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { challengeToken } = req.body;
-      const result = await this.service.resendTwoFactorLogin(challengeToken);
-
-      res.status(200).json({
-        success: true,
-        message: 'A new verification code has been sent to your email address.',
-        data: {
-          requiresTwoFactor: true,
-          challengeToken: result.challengeToken,
-          maskedEmail: result.maskedEmail,
-          expiresInSeconds: result.expiresInSeconds,
-          ...(result.devPreviewCode ? { devPreviewCode: result.devPreviewCode } : {}),
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  startEnableTwoFactor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  startTotpSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const staffId = req.user!.staffId;
-      const result = await this.service.startEnableTwoFactor(staffId);
+      const result = await this.service.startTotpSetup(staffId);
 
       res.status(200).json({
         success: true,
-        message: 'Verification code sent to your email address.',
+        message: 'Scan the QR code with Google Authenticator and enter the 6-digit code.',
         data: result,
       });
     } catch (error) {
@@ -106,15 +82,15 @@ export class AuthController {
     }
   };
 
-  confirmEnableTwoFactor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  confirmTotpSetup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const staffId = req.user!.staffId;
-      const { challengeToken, code } = req.body;
-      const staff = await this.service.confirmEnableTwoFactor(staffId, challengeToken, code);
+      const { setupToken, code } = req.body;
+      const staff = await this.service.confirmTotpSetup(staffId, setupToken, code);
 
       res.status(200).json({
         success: true,
-        message: 'Two-factor authentication has been enabled.',
+        message: 'Google Authenticator 2FA has been enabled.',
         data: staff,
       });
     } catch (error) {

@@ -10,17 +10,6 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   WORKSPACE_TIMEZONE: z.string().default('Africa/Lagos'),
   WORKSPACE_NAME: z.string().default('Dare Adeboye Innovation Hub'),
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_SECURE: z
-    .string()
-    .optional()
-    .transform((v) => v === 'true' || v === '1'),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z
-    .string()
-    .default('Dare Adeboye Innovation Hub <no-reply@clockin.workspace>'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

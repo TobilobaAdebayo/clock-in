@@ -25,11 +25,6 @@ enum ErrorStatus {
   RESOLVED
 }
 
-enum TwoFactorPurpose {
-  LOGIN
-  ENABLE
-}
-
 model Visitor {
   id          String       @id @default(uuid())
   fullName    String       @map("full_name")
@@ -58,37 +53,21 @@ model Attendance {
 }
 
 model Staff {
-  id               String               @id @default(uuid())
-  fullName         String               @map("full_name")
-  email            String               @unique
-  passwordHash     String               @map("password_hash")
-  role             Role                 @default(RECEPTIONIST)
-  isActive         Boolean              @default(true) @map("is_active")
-  twoFactorEnabled Boolean              @default(false) @map("two_factor_enabled")
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
+  id               String           @id @default(uuid())
+  fullName         String           @map("full_name")
+  email            String           @unique
+  passwordHash     String           @map("password_hash")
+  role             Role             @default(RECEPTIONIST)
+  isActive         Boolean          @default(true) @map("is_active")
+  twoFactorEnabled Boolean          @default(false) @map("two_factor_enabled")
+  twoFactorSecret  String?          @map("two_factor_secret")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
 
-  sessions            RefreshSession[]
-  auditLogs           AuditLog[]
-  twoFactorChallenges TwoFactorChallenge[]
+  sessions         RefreshSession[]
+  auditLogs        AuditLog[]
 
   @@map("staff")
-}
-
-model TwoFactorChallenge {
-  id         String           @id @default(uuid())
-  staffId    String           @map("staff_id")
-  purpose    TwoFactorPurpose
-  codeHash   String           @map("code_hash")
-  attempts   Int              @default(0)
-  expiresAt  DateTime         @map("expires_at")
-  consumedAt DateTime?        @map("consumed_at")
-  createdAt  DateTime         @default(now()) @map("created_at")
-
-  staff      Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
-
-  @@index([staffId, purpose])
-  @@map("two_factor_challenges")
 }
 
 model RefreshSession {

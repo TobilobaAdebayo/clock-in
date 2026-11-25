@@ -19,6 +19,7 @@ describe('Receptionist Dashboard, Directory & Profiles (M4 Integration)', () => 
     role: Role.RECEPTIONIST,
     isActive: true,
     twoFactorEnabled: false,
+    twoFactorSecret: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
