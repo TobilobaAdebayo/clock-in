@@ -85,6 +85,21 @@ export class StaffController {
       next(error);
     }
   };
+
+  resetTwoFactor = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const actorId = req.user!.staffId;
+      const staff = await this.service.resetTwoFactor(id, actorId);
+      res.json({
+        success: true,
+        data: staff,
+        message: 'Two-factor authentication has been reset for this account',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const staffController = new StaffController();

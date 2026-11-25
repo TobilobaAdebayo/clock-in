@@ -32,3 +32,4 @@ staffRouter.get('/:id', staffController.getStaff);
 staffRouter.post('/', validateBody(createStaffSchema), staffController.createStaff);
 staffRouter.patch('/:id', validateBody(updateStaffSchema), staffController.updateStaff);
 staffRouter.post('/:id/deactivate', staffController.deactivateStaff);
+staffRouter.post('/:id/reset-2fa', staffController.resetTwoFactor);

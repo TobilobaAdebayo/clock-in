@@ -1,6 +1,7 @@
 import { Staff, Role } from '@prisma/client';
 import { staffRepository, StaffRepository, StaffFilterCriteria } from './staff.repository.js';
 import { sessionRepository, SessionRepository } from '../auth/session.repository.js';
+import { twoFactorRepository, TwoFactorRepository } from '../auth/two-factor.repository.js';
 import { auditService, AuditService } from '../audit/audit.service.js';
 import { prisma } from '../../shared/db/prisma.js';
 import { hashPassword } from '../../shared/utils/crypto.js';
@@ -28,6 +29,7 @@ export class StaffService {
     private staffRepo: StaffRepository = staffRepository,
     private sessionRepo: SessionRepository = sessionRepository,
     private audit: AuditService = auditService,
+    private twoFactorRepo: TwoFactorRepository = twoFactorRepository,
   ) {}
 
   async listStaff(
@@ -167,6 +169,36 @@ export class StaffService {
 
   async deactivateStaff(id: string, actorId: string): Promise<Omit<Staff, 'passwordHash'>> {
     return this.updateStaff(id, { isActive: false }, actorId);
+  }
+
+  /**
+   * Super Admin recovery action: resets/disables Email 2FA on a staff account.
+   */
+  async resetTwoFactor(id: string, actorId: string): Promise<Omit<Staff, 'passwordHash'>> {
+    const existing = await this.staffRepo.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Staff account not found.');
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const updated = await this.staffRepo.update(id, { twoFactorEnabled: false }, tx);
+      await this.twoFactorRepo.invalidatePendingForStaff(id, undefined, tx);
+
+      await this.audit.record(
+        {
+          actorId,
+          action: 'RESET_STAFF_2FA',
+          recordType: 'STAFF',
+          recordId: id,
+          oldValues: { twoFactorEnabled: existing.twoFactorEnabled },
+          newValues: { twoFactorEnabled: false },
+        },
+        tx,
+      );
+
+      const { passwordHash: _, ...sanitized } = updated;
+      return sanitized;
+    });
   }
 }
 

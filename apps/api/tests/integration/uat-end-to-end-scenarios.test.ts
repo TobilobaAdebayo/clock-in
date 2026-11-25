@@ -28,6 +28,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     passwordHash: 'hash',
     role: Role.RECEPTIONIST,
     isActive: true,
+    twoFactorEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -39,6 +40,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     passwordHash: 'hash',
     role: Role.SUPER_ADMIN,
     isActive: true,
+    twoFactorEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

@@ -16,6 +16,7 @@ describe('Reports & Excel Export (M5 Integration)', () => {
     passwordHash: 'hash',
     role: Role.RECEPTIONIST,
     isActive: true,
+    twoFactorEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

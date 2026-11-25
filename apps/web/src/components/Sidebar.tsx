@@ -24,6 +24,7 @@ export function Sidebar() {
     { label: 'Attendance', href: `${basePath}/attendance`, exact: false },
     { label: 'Active Visitors', href: `${basePath}/active`, exact: false },
     { label: 'Reports', href: `${basePath}/reports`, exact: false },
+    { label: 'Security (2FA)', href: `${basePath}/security`, exact: false },
   ];
 
   const adminItems = [
@@ -103,7 +104,15 @@ export function Sidebar() {
         </div>
         <button
           type="button"
-          onClick={() => logout()}
+          onClick={() =>
+            logout(
+              pathname.startsWith('/super-admin')
+                ? '/super-admin'
+                : pathname.startsWith('/staff')
+                ? '/staff'
+                : '/staff-login',
+            )
+          }
           title="Sign out"
           aria-label="Sign out"
           className="text-[#6B7A8C] hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition flex-shrink-0"

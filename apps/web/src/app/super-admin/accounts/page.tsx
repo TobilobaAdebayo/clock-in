@@ -13,6 +13,7 @@ interface StaffItem {
   email: string;
   role: 'RECEPTIONIST' | 'SUPER_ADMIN';
   isActive: boolean;
+  twoFactorEnabled?: boolean;
   createdAt: string;
 }
 
@@ -132,6 +133,24 @@ export default function StaffAccountsPage() {
     }
   };
 
+  const resetTwoFactor = async (staff: StaffItem) => {
+    if (!confirm(`Reset 2FA for ${staff.fullName}? They will be able to sign in with password only until they re-enable 2FA.`)) {
+      return;
+    }
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      await apiClient(`/api/v1/staff/${staff.id}/reset-2fa`, {
+        method: 'POST',
+      });
+      setSuccessMsg(`2FA has been reset for ${staff.fullName}.`);
+      fetchStaff();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reset 2FA.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -184,6 +203,7 @@ export default function StaffAccountsPage() {
                 <th className="px-6 py-3.5">Email</th>
                 <th className="px-6 py-3.5">Role</th>
                 <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5">2FA</th>
                 <th className="px-6 py-3.5">Created</th>
                 <th className="px-6 py-3.5 text-right">Manage</th>
               </tr>
@@ -191,13 +211,13 @@ export default function StaffAccountsPage() {
             <tbody className="divide-y divide-[#EEF2F6]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-[#6B7A8C]">
+                  <td colSpan={7} className="px-6 py-8 text-center text-[#6B7A8C]">
                     Loading staff accounts...
                   </td>
                 </tr>
               ) : staffList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-[#6B7A8C]">
+                  <td colSpan={7} className="px-6 py-8 text-center text-[#6B7A8C]">
                     No staff accounts found.
                   </td>
                 </tr>
@@ -216,6 +236,11 @@ export default function StaffAccountsPage() {
                         {s.isActive ? 'Active' : 'Deactivated'}
                       </Badge>
                     </td>
+                    <td className="px-6 py-4">
+                      <Badge tone={s.twoFactorEnabled ? 'success' : 'neutral'}>
+                        {s.twoFactorEnabled ? 'Enabled' : 'Off'}
+                      </Badge>
+                    </td>
                     <td className="px-6 py-4 text-xs text-[#6B7A8C]">
                       {formatShortDayAndDate(s.createdAt)}
                     </td>
@@ -227,12 +252,20 @@ export default function StaffAccountsPage() {
                       >
                         Edit
                       </button>
+                      {s.twoFactorEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => resetTwoFactor(s)}
+                          className="text-xs font-semibold text-amber-700 hover:underline"
+                        >
+                          Reset 2FA
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleStatus(s)}
-                        className={`text-xs font-semibold hover:underline ${
-                          s.isActive ? 'text-red-600' : 'text-emerald-700'
-                        }`}
+                        className={`text-xs font-semibold hover:underline ${s.isActive ? 'text-red-600' : 'text-emerald-700'
+                          }`}
                       >
                         {s.isActive ? 'Deactivate' : 'Activate'}
                       </button>

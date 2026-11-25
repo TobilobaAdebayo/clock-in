@@ -8,15 +8,39 @@ export interface StaffUser {
   fullName: string;
   email: string;
   role: 'RECEPTIONIST' | 'SUPER_ADMIN';
+  twoFactorEnabled?: boolean;
 }
+
+export interface TwoFactorChallenge {
+  requiresTwoFactor: true;
+  challengeToken: string;
+  maskedEmail: string;
+  expiresInSeconds: number;
+  devPreviewCode?: string;
+}
+
+export type LoginOutcome =
+  | { requiresTwoFactor: false; staff: StaffUser }
+  | TwoFactorChallenge;
 
 interface AuthContextType {
   user: StaffUser | null;
   accessToken: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    options?: { redirect?: boolean },
+  ) => Promise<LoginOutcome>;
+  verifyTwoFactorLogin: (
+    challengeToken: string,
+    code: string,
+    options?: { redirect?: boolean },
+  ) => Promise<StaffUser>;
+  resendTwoFactorLogin: (challengeToken: string) => Promise<TwoFactorChallenge>;
+  updateUser: (patch: Partial<StaffUser>) => void;
+  logout: (redirectTo?: string) => Promise<void>;
   setToken: (token: string | null) => void;
 }
 
@@ -39,6 +63,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setToken = (token: string | null) => {
     globalAccessToken = token;
     setAccessTokenState(token);
+  };
+
+  const updateUser = (patch: Partial<StaffUser>) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
   };
 
   // Try to restore session on initial load using httpOnly refresh cookie
@@ -68,7 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (
+    email: string,
+    password: string,
+    options?: { redirect?: boolean },
+  ): Promise<LoginOutcome> => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/v1/auth/login', {
@@ -83,15 +115,86 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(json.error?.message || 'Login failed');
       }
 
+      if (json.data?.requiresTwoFactor) {
+        return {
+          requiresTwoFactor: true,
+          challengeToken: json.data.challengeToken,
+          maskedEmail: json.data.maskedEmail,
+          expiresInSeconds: json.data.expiresInSeconds,
+          devPreviewCode: json.data.devPreviewCode,
+        };
+      }
+
+      const staffUser: StaffUser = json.data.staff;
       setToken(json.data.accessToken);
-      setUser(json.data.staff);
-      router.push(json.data.staff.role === 'SUPER_ADMIN' ? '/super-admin' : '/staff');
+      setUser(staffUser);
+
+      if (options?.redirect !== false) {
+        router.push(staffUser.role === 'SUPER_ADMIN' ? '/super-admin' : '/staff');
+      }
+
+      return { requiresTwoFactor: false, staff: staffUser };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = async () => {
+  const verifyTwoFactorLogin = async (
+    challengeToken: string,
+    code: string,
+    options?: { redirect?: boolean },
+  ): Promise<StaffUser> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/v1/auth/2fa/verify-login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeToken, code: code.trim() }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error?.message || 'Verification failed');
+      }
+
+      const staffUser: StaffUser = json.data.staff;
+      setToken(json.data.accessToken);
+      setUser(staffUser);
+
+      if (options?.redirect !== false) {
+        router.push(staffUser.role === 'SUPER_ADMIN' ? '/super-admin' : '/staff');
+      }
+
+      return staffUser;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendTwoFactorLogin = async (challengeToken: string): Promise<TwoFactorChallenge> => {
+    const res = await fetch('/api/v1/auth/2fa/resend-login', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ challengeToken }),
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.error?.message || 'Failed to resend verification code');
+    }
+
+    return {
+      requiresTwoFactor: true,
+      challengeToken: json.data.challengeToken,
+      maskedEmail: json.data.maskedEmail,
+      expiresInSeconds: json.data.expiresInSeconds,
+      devPreviewCode: json.data.devPreviewCode,
+    };
+  };
+
+  const logout = async (redirectTo = '/staff-login') => {
     try {
       await fetch('/api/v1/auth/logout', {
         method: 'POST',
@@ -103,7 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setToken(null);
       setUser(null);
-      router.push('/staff-login');
+      router.push(redirectTo);
     }
   };
 
@@ -115,6 +218,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!user,
         login,
+        verifyTwoFactorLogin,
+        resendTwoFactorLogin,
+        updateUser,
         logout,
         setToken,
       }}
