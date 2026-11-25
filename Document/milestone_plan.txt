@@ -1,0 +1,428 @@
+﻿
+CLOCK IN – File Structure & Milestone Plan
+Companion to the CLOCK IN Project Requirements Document. Stack: TypeScript, Node.js, Express, Next.js, PostgreSQL (Prisma), modular monolith, MVC.
+1. Architecture Summary
+Modular monolith: one deployable Express API, split into self-contained business modules (auth, staff, visitors, attendance, reports, audit, app-errors, settings, dashboard). One Postgres database. Modules can be extracted into services later without a rewrite.
+MVC inside every module:
+Model = Prisma access wrapped in a *.repository.ts plus domain types. Business rules live in *.service.ts.
+View = the JSON response shape (DTO mappers) on the API side, and the Next.js UI as the real presentation layer.
+Controller = thin *.controller.ts that parses the request, calls a service, and returns the response. No business logic.
+Request flow: route → middleware (rate limit, authenticate, authorize, validate) → controller → service → repository → Postgres.
+Module boundary rules: a module exposes only its index.ts (public service API). No importing another module's repository, controller or Prisma models. Enforce with eslint-plugin-boundaries.
+Frontend: Next.js App Router, Tailwind CSS. Calls the Express API only (no direct DB access from Next.js). Proxy /api/* through Next.js rewrites so staff cookies stay same-origin.
+Monorepo: pnpm workspaces with apps/api, apps/web, and packages/shared (Zod schemas and types shared by both apps).
+Note on the requirements document: it names Supabase as the managed database/auth provider, but the stack you specified is plain Node.js + Postgres. This plan therefore uses Postgres + Prisma with custom JWT/refresh-token staff auth (matching the Staff and Session/Refresh Token entities in section 4 of the document). Postgres can still be hosted on Supabase, Neon or any managed provider.
+2. Repository File Structure
+clock-in/
+├── package.json                    # workspace root scripts (dev, build, test, lint)
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── .nvmrc
+├── .gitignore
+├── .editorconfig
+├── .eslintrc.cjs                   # incl. module-boundary rules
+├── .prettierrc
+├── docker-compose.yml              # local Postgres (+ optional pgAdmin)
+├── README.md
+├── .github/
+│   └── workflows/
+│       └── ci.yml                  # lint, typecheck, test, build
+│
+├── docs/
+│   ├── architecture.md
+│   ├── milestones.md
+│   ├── api/openapi.yaml            # documented REST API
+│   ├── decisions/                  # ADRs (phone uniqueness, confirmation step, etc.)
+│   └── runbooks/
+│       ├── deployment.md
+│       └── backup-restore.md
+│
+├── packages/
+│   └── shared/
+│       ├── package.json
+│       └── src/
+│           ├── index.ts
+│           ├── constants/          # roles, payment frequencies, statuses
+│           ├── schemas/            # Zod: visitor, attendance, auth, staff, reports
+│           └── types/              # DTO types shared by api + web
+│
+├── apps/
+│   ├── api/
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   ├── vitest.config.ts
+│   │   ├── Dockerfile
+│   │   ├── .env.example
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   ├── seed.ts             # first Super Admin + demo data
+│   │   │   └── migrations/         # versioned; includes raw-SQL partial unique index
+│   │   ├── src/
+│   │   │   ├── server.ts           # boots HTTP server, graceful shutdown
+│   │   │   ├── app.ts              # Express app: helmet, cors, json, routes, error handler
+│   │   │   ├── config/
+│   │   │   │   ├── env.ts          # Zod-validated environment
+│   │   │   │   ├── cors.ts         # allow-list
+│   │   │   │   └── logger.ts       # pino, with redaction of phone/password/tokens
+│   │   │   ├── routes/
+│   │   │   │   └── index.ts        # mounts every module under /api/v1
+│   │   │   ├── shared/
+│   │   │   │   ├── db/prisma.ts
+│   │   │   │   ├── errors/         # AppError, HttpErrors, error codes
+│   │   │   │   ├── middleware/
+│   │   │   │   │   ├── authenticate.ts
+│   │   │   │   │   ├── authorize.ts        # requireRole(...)
+│   │   │   │   │   ├── validate.ts         # Zod body/query/params
+│   │   │   │   │   ├── rate-limiters.ts    # public vs login vs staff limits
+│   │   │   │   │   ├── request-id.ts
+│   │   │   │   │   ├── not-found.ts
+│   │   │   │   │   └── error-handler.ts    # maps errors, writes to app-errors
+│   │   │   │   └── utils/
+│   │   │   │       ├── async-handler.ts
+│   │   │   │       ├── phone.ts            # normalisation (E.164, default NG)
+│   │   │   │       ├── time.ts             # workspace-timezone helpers
+│   │   │   │       ├── pagination.ts
+│   │   │   │       └── crypto.ts           # hashing, token hashing
+│   │   │   └── modules/
+│   │   │       ├── auth/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── auth.routes.ts
+│   │   │       │   ├── auth.controller.ts
+│   │   │       │   ├── auth.service.ts
+│   │   │       │   ├── token.service.ts    # access JWT + hashed refresh tokens
+│   │   │       │   ├── session.repository.ts
+│   │   │       │   └── auth.dto.ts
+│   │   │       ├── staff/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── staff.routes.ts
+│   │   │       │   ├── staff.controller.ts
+│   │   │       │   ├── staff.service.ts
+│   │   │       │   ├── staff.repository.ts
+│   │   │       │   └── staff.dto.ts
+│   │   │       ├── visitors/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── visitors.public.routes.ts   # guest registration + lookup
+│   │   │       │   ├── visitors.staff.routes.ts    # directory + profile
+│   │   │       │   ├── visitors.controller.ts
+│   │   │       │   ├── visitors.service.ts
+│   │   │       │   ├── visitors.repository.ts
+│   │   │       │   └── visitors.dto.ts             # masked vs full views
+│   │   │       ├── attendance/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── attendance.public.routes.ts # check-in / check-out
+│   │   │       │   ├── attendance.staff.routes.ts  # list, filter, active, correct
+│   │   │       │   ├── attendance.controller.ts
+│   │   │       │   ├── attendance.service.ts       # transactions, active-session rule
+│   │   │       │   ├── attendance.repository.ts
+│   │   │       │   └── attendance.dto.ts
+│   │   │       ├── dashboard/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── dashboard.routes.ts
+│   │   │       │   ├── dashboard.controller.ts
+│   │   │       │   └── dashboard.service.ts        # totals, active, weekly/monthly counts
+│   │   │       ├── reports/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── reports.routes.ts
+│   │   │       │   ├── reports.controller.ts
+│   │   │       │   ├── reports.service.ts
+│   │   │       │   ├── reports.repository.ts       # cursor/batched reads
+│   │   │       │   └── excel.builder.ts            # exceljs streaming writer
+│   │   │       ├── audit/
+│   │   │       │   ├── index.ts                    # exports AuditService.record()
+│   │   │       │   ├── audit.routes.ts
+│   │   │       │   ├── audit.controller.ts
+│   │   │       │   ├── audit.service.ts
+│   │   │       │   └── audit.repository.ts
+│   │   │       ├── app-errors/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── app-errors.routes.ts
+│   │   │       │   ├── app-errors.controller.ts
+│   │   │       │   ├── app-errors.service.ts
+│   │   │       │   └── app-errors.repository.ts
+│   │   │       ├── settings/
+│   │   │       │   ├── index.ts
+│   │   │       │   ├── settings.routes.ts
+│   │   │       │   ├── settings.controller.ts
+│   │   │       │   ├── settings.service.ts         # cached workspace name + timezone
+│   │   │       │   └── settings.repository.ts
+│   │   │       └── health/
+│   │   │           └── health.routes.ts            # /health, /ready
+│   │   └── tests/
+│   │       ├── unit/               # services, utils
+│   │       ├── integration/        # supertest + test Postgres
+│   │       └── helpers/            # factories, test db setup
+│   │
+│   └── web/
+│       ├── package.json
+│       ├── tsconfig.json
+│       ├── next.config.ts          # rewrites /api -> Express, security headers
+│       ├── tailwind.config.ts
+│       ├── postcss.config.mjs
+│       ├── .env.example
+│       ├── public/
+│       └── src/
+│           ├── middleware.ts       # UX-only route guard (backend remains the authority)
+│           ├── app/
+│           │   ├── layout.tsx
+│           │   ├── globals.css
+│           │   ├── (public)/
+│           │   │   ├── page.tsx                     # landing -> check-in
+│           │   │   └── check-in/page.tsx            # register / identify / check in / out
+│           │   ├── (auth)/
+│           │   │   └── login/page.tsx
+│           │   ├── (staff)/
+│           │   │   ├── layout.tsx                   # sidebar, auth gate
+│           │   │   ├── dashboard/page.tsx
+│           │   │   ├── visitors/page.tsx
+│           │   │   ├── visitors/[id]/page.tsx
+│           │   │   ├── attendance/page.tsx
+│           │   │   ├── active/page.tsx
+│           │   │   └── reports/page.tsx
+│           │   ├── (admin)/
+│           │   │   ├── layout.tsx                   # Super Admin only
+│           │   │   ├── staff/page.tsx
+│           │   │   ├── settings/page.tsx
+│           │   │   ├── audit-logs/page.tsx
+│           │   │   └── error-log/page.tsx
+│           │   ├── not-found.tsx
+│           │   └── error.tsx
+│           ├── components/
+│           │   ├── ui/             # Button, Input, Table, Modal, Toast, Pagination
+│           │   ├── layout/         # Sidebar, Topbar, PageHeader
+│           │   ├── check-in/       # RegisterForm, PhoneLookup, ConfirmIdentity, StatusCard
+│           │   ├── visitors/
+│           │   ├── attendance/
+│           │   └── reports/
+│           ├── lib/
+│           │   ├── api-client.ts   # fetch wrapper, refresh-on-401, typed errors
+│           │   ├── auth-context.tsx
+│           │   ├── format-date.ts  # workspace-timezone display
+│           │   └── validators.ts   # re-exports shared Zod schemas
+│           └── hooks/              # useDebounce, usePaginatedQuery, useAuth
+3. Key Design Decisions Built Into the Structure
+Concern
+Decision
+One open session per visitor (FR-06)
+Partial unique index on attendance(visitor_id) WHERE check_out IS NULL, added through a raw-SQL migration (Prisma cannot express it in the schema). Check-in runs in a transaction and handles the unique-violation as a friendly "already checked in" response.
+Concurrency and duplicates
+Database constraint is the source of truth; service layer also uses a transaction. Check-out uses a conditional update (WHERE check_out IS NULL).
+Server timestamps (FR-04, FR-05)
+Timestamps are always generated server-side (timestamptz, stored UTC). Weekly/monthly counts and report dates use the workspace timezone from settings.
+Phone uniqueness
+Normalise to E.164 (default region NG) before saving; unique constraint on the normalised value. Recorded as an ADR.
+Returning-visitor privacy (FR-03, FR-07)
+Public lookup returns only a masked hint plus a short-lived signed lookup token; the visitor must confirm (for example by typing their full name) before check-in or check-out. Public endpoints never return full profile data. Exact confirmation method recorded as an ADR.
+Staff auth (FR-08)
+Argon2id password hashing, short-lived access JWT, rotating refresh token in an httpOnly cookie, only the token hash stored in the database, revocation on logout and on staff deactivation.
+RBAC (FR-09)
+authenticate then requireRole('RECEPTIONIST' | 'SUPER_ADMIN') middleware on every protected route. Public routes live in separate *.public.routes.ts files so exposure is obvious in review.
+Auditing (FR-17, FR-18)
+AuditService.record() is called inside the same transaction as the change it describes, storing old and new values.
+Exports (FR-15)
+Streaming .xlsx via exceljs, batched/cursor reads, row cap and timeout guard so large exports do not freeze the API.
+Pagination (NFR)
+All list endpoints are paginated with a shared helper and capped page sizes.
+Logging (privacy)
+Structured logs with redaction of phone numbers, passwords and tokens.
+4. Milestone Overview
+Estimates assume a single full-stack developer working in focused days. Adjust to your pace.
+#
+Milestone
+Est.
+Requirements covered
+M0
+Foundation & tooling
+2–3 days
+NFR: Maintainability
+M1
+Database & core domain
+3 days
+Data model, NFR: Data integrity
+M2
+Guest registration, check-in & check-out
+4–5 days
+FR-01 to FR-07
+M3
+Staff authentication & RBAC
+4 days
+FR-08, FR-09
+M4
+Receptionist dashboard, directory & profiles
+5 days
+FR-10 to FR-14
+M5
+Reports & Excel export
+4 days
+FR-15
+M6
+Super Admin tools
+5–6 days
+FR-16 to FR-20
+M7
+Hardening, testing & deployment
+5 days
+NFR: Security, Reliability, Backup
+M8
+UAT & launch
+3 days
+Whole system
+Total: roughly 35–38 working days (7–8 weeks).
+5. Milestone Documents
+Milestone 0 – Foundation & Tooling
+Goal: a running skeleton where both apps start, lint, test and build in CI.
+Tasks
+Create the pnpm monorepo (apps/api, apps/web, packages/shared), base tsconfig, ESLint (with module-boundary rules), Prettier.
+Scaffold the Express app with helmet, CORS allow-list, JSON body limit, request-id, central error handler, /health endpoint.
+Zod-validated env.ts for the API; .env.example for both apps.
+Scaffold Next.js (App Router) with Tailwind and a base layout.
+Local Postgres through docker-compose.yml; Prisma installed and connected.
+Vitest and Supertest set up; GitHub Actions CI running lint, typecheck, test and build.
+Write README.md with setup steps.
+Deliverables: working monorepo, CI green, README.
+Acceptance criteria
+pnpm dev starts API and web together; GET /health returns OK.
+Invalid or missing env vars stop the API at boot with a clear message.
+CI passes on a clean clone.
+Milestone 1 – Database & Core Domain
+Goal: the full data model with constraints, migrations and seed data.
+Tasks
+Prisma schema: Visitor, Attendance, Staff, RefreshSession, AuditLog, AppError, Setting.
+Enums: Role (RECEPTIONIST, SUPER_ADMIN), PaymentFrequency (DAILY, WEEKLY, MONTHLY), ErrorSeverity, ErrorStatus.
+Indexes: unique normalised phone; attendance(visitor_id, check_in); attendance(check_in); partial unique index for open sessions (raw SQL migration).
+Build phone.ts and time.ts utilities with unit tests.
+Seed script: first Super Admin (from env), default settings (workspace name, timezone), optional demo data.
+ADRs: phone uniqueness rule, returning-visitor confirmation method.
+Deliverables: versioned migrations, seed script, utilities with tests, two ADRs.
+Acceptance criteria
+Migration applies to an empty database and rolls forward cleanly.
+Inserting a second open session for one visitor fails at the database level.
+Phone normalisation tests cover local (0803…), international (+234…) and invalid inputs.
+Milestone 2 – Guest Registration, Check-In & Check-Out
+Goal: a visitor can register, be recognised later, check in and check out. Covers FR-01 to FR-07.
+Backend tasks
+POST /api/v1/public/visitors/register – full name, phone, payment frequency (Zod validated).
+POST /api/v1/public/visitors/lookup – by phone; returns masked hint and lookup token only.
+POST /api/v1/public/attendance/check-in and /check-out – require the confirmed lookup token; server-generated timestamps.
+Active-session rule enforced via transaction plus the partial unique index; idempotent behaviour on double submit.
+Public rate limiter and generic responses to resist phone-number enumeration.
+Frontend tasks
+Mobile-friendly /check-in flow: choose new or returning, register form, phone lookup, confirmation step, success and "already checked in" states, check-out action.
+Large touch targets and readable text for reception tablets.
+Deliverables: public API, check-in UI, integration tests.
+Acceptance criteria
+First-time visitor registers and is checked in with a server timestamp.
+Returning visitor is recognised by phone and must confirm before any action.
+Two simultaneous check-in requests produce exactly one open session.
+Public responses never contain another visitor's full name, phone or history.
+Check-out with no open session returns a clear, safe error.
+Milestone 3 – Staff Authentication & RBAC
+Goal: secure staff login and server-enforced roles. Covers FR-08, FR-09.
+Tasks
+POST /auth/login, /auth/refresh, /auth/logout, GET /auth/me.
+Argon2id hashing; short-lived access JWT; rotating refresh token in an httpOnly, secure, sameSite cookie; token hash stored in RefreshSession.
+Login-specific rate limiter and generic failure messages; block inactive staff.
+authenticate and requireRole middleware; apply to all staff routes (stubs allowed).
+Next.js: login page, auth context, refresh-on-401 in api-client.ts, protected (staff) and (admin) layouts, UX-only middleware.ts guard.
+Deliverables: auth module, protected layouts, role-matrix integration tests.
+Acceptance criteria
+Receptionist and Super Admin can sign in and out; revoked refresh tokens stop working.
+Calling a Super Admin endpoint with a receptionist token returns 403, regardless of the UI.
+A deactivated staff account cannot log in and existing sessions are invalidated.
+Tests cover every route in the permission matrix (Guest / Receptionist / Super Admin).
+Milestone 4 – Receptionist Dashboard, Directory & Profiles
+Goal: staff can monitor and search attendance. Covers FR-10 to FR-14.
+Backend tasks
+GET /dashboard/summary – total visits today, currently checked in, weekly and monthly counts (workspace timezone).
+GET /visitors – paginated, search by name or phone (normalised match).
+GET /visitors/:id – profile with visit counts; GET /visitors/:id/attendance – paginated history.
+GET /attendance – filters: date, date range, visitor name or phone, status; GET /attendance/active.
+Frontend tasks
+Dashboard cards and today's table; visitors directory with debounced search; visitor profile page; attendance filter page; active visitors page.
+Deliverables: dashboard, directory, profile, filtering UI and API.
+Acceptance criteria
+Dashboard counts match database truth around midnight in the workspace timezone (tested with boundary cases).
+Search works on partial name and on phone in local or international format.
+All lists are paginated and responsive on common datasets (seed 10k+ attendance rows to check).
+Receptionist cannot see any Super Admin-only data.
+Milestone 5 – Reports & Excel Export
+Goal: downloadable .xlsx reports that respect filters and permissions. Covers FR-15.
+Tasks
+Endpoints for daily, weekly, monthly, custom range and individual visitor exports.
+Columns: S/N, Visitor Name, Phone Number, Attendance Date, Time In, Time Out, Payment Frequency, Attendance Status.
+Streaming exceljs writer with batched reads; row cap and request timeout guard; consistent filename convention (for example attendance_2026-11-01_to_2026-11-30.xlsx).
+Dates and times rendered in workspace timezone; open sessions marked "Currently checked in".
+Reports page with report type, date pickers and download button; loading and error states.
+Deliverables: reports module, reports UI, export tests.
+Acceptance criteria
+Each of the five report types downloads a valid file that opens in Excel.
+Exported rows exactly match the on-screen filters.
+A large export (50k+ rows) completes without freezing other API requests.
+Unauthenticated requests are rejected.
+Milestone 6 – Super Admin Tools
+Goal: staff management, corrections, audit, error review and settings. Covers FR-16 to FR-20.
+Tasks
+Staff: create, update, activate and deactivate receptionists (cannot demote or deactivate the last Super Admin).
+Attendance correction: edit check-in/check-out with validation (check-out after check-in, no overlapping open sessions); mandatory reason field; old and new values recorded.
+AuditService.record() wired into staff changes, corrections and settings changes inside the same transaction.
+Audit log viewer with filters (actor, action, record type, date) and pagination.
+Application error capture in the central error handler (no secrets or stack payload leakage); error list with status (open, investigating, resolved) and resolve action.
+Settings: workspace name and timezone (validated IANA timezone), cached with invalidation.
+Frontend: admin pages for staff, settings, audit logs and error log.
+Deliverables: admin API and UI, audit coverage tests.
+Acceptance criteria
+Every correction and staff change produces an audit entry with actor, old values and new values.
+A failed audit write rolls back the change.
+Changing the timezone changes how dashboards and reports bucket dates, with tests.
+Receptionist access to all admin endpoints returns 403.
+Milestone 7 – Hardening, Testing & Deployment
+Goal: production-ready security, reliability and operations.
+Tasks
+Security review: headers (helmet, CSP on web), CORS allow-list, rate-limit tuning, input size limits, dependency audit, cookie flags, HTTPS-only in production.
+Privacy review: scan API responses and logs for leaked phone numbers, hashes or tokens.
+Reliability: concurrency test for check-in, DB connection pooling, graceful shutdown, /ready check against the database.
+Test coverage: unit tests for services, integration tests for every endpoint, a small end-to-end smoke suite (Playwright) for check-in and staff login.
+Finish OpenAPI documentation in docs/api/openapi.yaml.
+Deployment: Dockerfile for API, environment configuration, production migrations (prisma migrate deploy), HTTPS and domain setup, CI/CD pipeline.
+Backups: automated daily Postgres backups, written and tested restore procedure in docs/runbooks/backup-restore.md.
+Basic monitoring and uptime check.
+Deliverables: deployed staging and production environments, runbooks, OpenAPI docs, passing test suite.
+Acceptance criteria
+All NFRs in section 6 of the requirements document are checked off with evidence.
+A backup is restored into a clean database successfully, and the steps are documented.
+No high-severity findings in the dependency audit.
+Milestone 8 – UAT & Launch
+Goal: validate with real users and go live.
+Tasks
+UAT with a receptionist and the Super Admin on a reception tablet and a phone, using a real-world scenario script (new visitor, returning visitor, forgotten check-out, correction, export).
+Fix UAT findings; confirm rollback plan.
+Import any needed historical data from the paper register (optional, agreed with stakeholders).
+Short user guide for receptionists and the Super Admin.
+Go-live checklist, first-week monitoring, issue log.
+Deliverables: UAT sign-off, user guide, live production system.
+Acceptance criteria
+Receptionist completes the daily workflow without help.
+Stakeholders sign off that the paper register can be retired.
+6. Requirement Traceability
+Requirement
+Milestone
+FR-01, FR-02, FR-03
+M2
+FR-04, FR-05, FR-06, FR-07
+M2
+FR-08, FR-09
+M3
+FR-10, FR-11, FR-12, FR-13, FR-14
+M4
+FR-15
+M5
+FR-16, FR-17, FR-18, FR-19, FR-20
+M6
+Security, Privacy, Reliability, Backup NFRs
+M1–M3 built in, verified in M7
+7. Open Decisions to Confirm
+Returning-visitor confirmation method (for example typing full name, or last four digits of the phone number). Needed before M2.
+Phone uniqueness rule: strictly unique per visitor, or can one phone be shared (for example family members)? Needed before M1.
+Forgotten check-outs: should the system auto-close open sessions at a configured time (for example midnight), or leave them for Super Admin correction only? Needed before M4.
+Receptionist correction rights: the baseline says none; confirm this stays true for v1.
+Hosting: where the API, web app and Postgres will run, and who handles backups. Needed before M7.
+Excel limits: maximum rows per export and whether very large ranges should be split by month.

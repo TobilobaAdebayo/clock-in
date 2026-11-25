@@ -1,0 +1,191 @@
+﻿
+
+
+CLOCK IN Application
+1. Project Overview
+CLOCK IN is a web-based attendance management system intended to replace a paper-based workspace visitor register. Visitors will register their details and record when they enter and leave the workspace. Receptionist will manage visitor records, monitor attendance, review visit history, and generate reports.
+1.1 Problem Statement
+A physical attendance book makes it difficult to search historical records, calculate visit counts, monitor who is currently on the premises, correct mistakes consistently, and prepare daily or periodic reports. CLOCK IN will centralise these records in a database and provide role-appropriate access to them.
+1.2 Project Objectives
+Replace manual paper attendance logging with a digital check-in/check-out process.
+Recognise returning visitors without requiring them to complete the full registration process again.
+Give receptionists a clear view of daily attendance, active visitors, and visitor history.
+Allow authorised staff to generate downloadable Excel attendance reports.
+Give the Super Admin controlled tools for staff management, record correction, settings, and audit review.
+Protect visitor information through authentication, authorisation, validation, and secure data handling.
+2. Users, Roles and Permissions
+The system has three user categories. Permissions must be enforced by the backend API; hiding a page or button in the frontend is not sufficient security.
+2.1 Walk-in / Guest Visitor
+Can open the public registration/check-in interface without a staff account.
+A first-time visitor can submit their full name, phone number, and payment frequency.
+A returning visitor can be identified using their phone number and proceed to check in or check out after an appropriate confirmation step.
+Can create a check-in record and later check out of that active visit.
+Cannot browse, search, or view another visitor's profile or attendance history.
+2.2 Receptionist
+Must sign in with an authorised staff account.
+Can view the receptionist dashboard and current day's attendance.
+Can view the list of visitors and search by name or phone number.
+Can view a visitor's profile, visit history, and visit counts.
+Can view currently checked-in visitors.
+Can filter attendance by date or period and export permitted reports to Excel.
+Cannot create or manage staff accounts, change system-wide settings, or correct attendance records in the baseline permission model.
+2.3 Super Admin
+Can access all receptionist capabilities.
+Can view all visitor and attendance records.
+Can correct attendance errors, with every correction recorded in an audit log.
+Can manage approved system settings.
+Can review administrative audit logs and application error records.
+3. Functional Requirements
+ID
+Requirement
+Description
+FR-01
+Guest registration
+The system shall allow a first-time visitor to submit full name, phone number, and payment frequency using a form.
+FR-02
+Payment frequency
+The system shall support Daily, Weekly, and Monthly as payment-frequency values. This records the visitor's selected frequency; it does not process payments.
+FR-03
+Returning visitor identification
+The system shall allow a returning visitor to be looked up using a phone number and shall not disclose private profile information before an appropriate confirmation step.
+FR-04
+Check-in
+The system shall create an attendance session with a server-generated check-in timestamp for a recognised visitor.
+FR-05
+Check-out
+The system shall update the visitor's currently open attendance session with a server-generated check-out timestamp.
+FR-06
+Active session rule
+The system shall prevent a visitor from having more than one open attendance session at the same time.
+FR-07
+Visitor privacy
+The public visitor interface shall not expose other visitors' personal information or attendance records.
+FR-08
+Staff authentication
+The system shall require receptionist and Super Admin users to authenticate before accessing protected functions.
+FR-09
+Role-based access
+The backend shall enforce permissions for Guest, Receptionist, and Super Admin operations.
+FR-10
+Daily dashboard
+The receptionist dashboard shall show useful daily attendance information, including total visits and currently checked-in visitors.
+FR-11
+Visitor directory
+Authorised staff shall be able to view and search visitor records by name or phone number.
+FR-12
+Visitor profile
+Authorised staff shall be able to view a visitor's profile and attendance history.
+FR-13
+Visit counts
+The system shall calculate visit counts for weekly and monthly periods using the configured workspace timezone.
+FR-14
+Attendance filtering
+Staff shall be able to filter attendance by date, date range, and relevant visitor details.
+FR-15
+Excel export
+Authorised staff shall be able to export daily, weekly, monthly, custom date-range, and individual visitor attendance records to .xlsx.
+FR-16
+Staff management
+The Super Admin shall be able to create, update, activate, and deactivate receptionist accounts.
+FR-17
+Attendance correction
+The Super Admin shall be able to correct an attendance record, and the system shall retain an audit trail of the change.
+FR-18
+Audit logging
+The system shall record important administrative actions, including staff changes and attendance corrections.
+FR-19
+Application error review
+The Super Admin shall be able to review application error records and their resolution status.
+FR-20
+Settings
+The Super Admin shall be able to manage approved system settings, such as workspace name and timezone, where included in the release.
+
+4. Data Requirements
+The following is a logical data model. The final database engine and ORM are still to be selected. The design should keep visitor identity separate from individual attendance sessions.
+Entity
+Key fields
+Purpose
+Visitor
+id; full_name; phone_number; payment_frequency; created_at; updated_at
+Stores a visitor's reusable profile. Phone number should be unique after normalisation, subject to the agreed business rule.
+Attendance
+id; visitor_id; check_in; check_out; created_at; updated_at
+Stores one visit/session. check_out remains empty while the visitor is checked in.
+Staff
+id; full_name; email; password_hash; role; is_active; created_at; updated_at
+Stores Receptionist and Super Admin accounts.
+Session / Refresh Token
+id; staff_id; token_hash; expires_at; revoked_at; created_at
+Supports secure staff sessions and logout/revocation.
+Audit Log
+id; actor_id; action; record_type; record_id; old_values; new_values; created_at
+Provides traceability for privileged changes.
+Application Error
+id; error_type; message; severity; status; created_at; resolved_at
+Stores operational errors for authorised review, without exposing sensitive secrets.
+
+5. Reports and Excel Export Requirements
+The system shall support these report types:
+Daily attendance report.
+Weekly attendance report.
+Monthly attendance report.
+Custom date-range report.
+Individual visitor attendance history.
+Suggested Excel columns:
+Column
+Description
+S/N
+Sequential row number in the exported file.
+Visitor Name
+Visitor's full name.
+Phone Number
+Visitor's phone number, visible only to authorised staff.
+Attendance Date
+Local date of the visit.
+Time In
+Check-in time.
+Time Out
+Check-out time; blank or marked as active if not yet checked out.
+Payment Frequency
+Daily, Weekly, or Monthly.
+Attendance Status
+Checked out or currently checked in.
+
+Exports must respect the filters selected by the staff member and the staff member's permissions. Large exports should be handled safely so that the application does not become unresponsive.
+6. Non-Functional Requirements
+Quality attribute
+Requirement
+Security
+Use HTTPS in production, secure password hashing, protected staff sessions, input validation, rate limiting, secure headers, and server-side role checks.
+Privacy
+Guests must not be able to retrieve another visitor's details. Sensitive information must not be unnecessarily exposed in API responses or logs.
+Reliability
+Attendance actions must be handled consistently. Duplicate submissions and concurrent requests must not create duplicate active sessions.
+Performance
+Common dashboard, search, and attendance views should load promptly under the expected workspace traffic. Use pagination for growing datasets.
+Usability
+The visitor check-in interface should be simple, readable, mobile-friendly, and usable on a reception tablet or desktop.
+Maintainability
+Use modular frontend and backend code, clear naming, environment configuration, documented APIs, and automated tests.
+Data integrity
+Use database constraints and transactions where needed to preserve valid attendance and staff records.
+Backup and recovery
+Production data must be backed up regularly, and a restoration procedure should be documented and tested.
+Compatibility
+The web application should support current mainstream desktop and mobile browsers.
+
+Technology Stack and ArchitectureCLOCK IN uses a Next.js frontend that talks to a dedicated Node.js backend API, with Supabase as the managed database and authentication provider.
+Frontend
+- Next.js (App Router) and React- Tailwind CSS for styling
+- Responsive design for tablets, phones and desktop
+Backend
+- Node.js with Express
+- REST API returning JSON
+- Zod for input validation
+- Helmet for secure HTTP headers
+- express-rate-limit for rate limiting on public endpoints
+- CORS allow-list
+Database
+- PostgreSQL
+- Prisma ORM with versioned migrations
+

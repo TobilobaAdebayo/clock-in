@@ -1,0 +1,26 @@
+{
+  "name": "clock-in",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CLOCK IN - Workspace Attendance and Visitor Management System",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm --recursive run build",
+    "typecheck": "tsc --noEmit",
+    "lint": "pnpm --recursive run lint",
+    "test": "pnpm --recursive run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "db:migrate": "pnpm --filter @clock-in/api prisma migrate dev",
+    "db:deploy": "pnpm --filter @clock-in/api prisma migrate deploy",
+    "db:status": "pnpm --filter @clock-in/api prisma migrate status",
+    "db:seed": "pnpm --filter @clock-in/api prisma db seed",
+    "db:generate": "pnpm --filter @clock-in/api prisma generate",
+    "db:studio": "pnpm --filter @clock-in/api prisma studio",
+    "db:import-historical": "pnpm --filter @clock-in/api db:import-historical"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

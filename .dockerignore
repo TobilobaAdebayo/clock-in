@@ -1,0 +1,14 @@
+node_modules
+.git
+.gitignore
+.next
+dist
+coverage
+*.log
+.env
+apps/api/.env
+apps/web/.env.local
+Document
+docs
+playwright-report
+test-results

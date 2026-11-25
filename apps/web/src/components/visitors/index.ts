@@ -1,0 +1,1 @@
+export { VisitorStatusBadge } from './VisitorStatusBadge';

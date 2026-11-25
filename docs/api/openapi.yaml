@@ -1,0 +1,1077 @@
+openapi: 3.0.3
+info:
+  title: CLOCK IN API
+  version: 1.0.0
+  description: |
+    REST API for **CLOCK IN**, a workspace attendance and visitor management system.
+
+    ### Authentication & Authorization
+    - **Public Guest endpoints** (`/api/v1/public/*`): No staff authentication required. Rate-limited per IP. Returning-visitor lookup returns only masked hints and an HMAC-signed `lookupToken` (no plaintext PII).
+    - **Staff endpoints** (`RECEPTIONIST`, `SUPER_ADMIN`): Require `Authorization: Bearer <accessToken>` header. Refresh tokens are rotated via `HttpOnly` `SameSite=Lax` cookies (`Secure` in production) scoped to `/api/v1/auth`.
+    - **Super Admin endpoints** (`SUPER_ADMIN` only): Staff management, attendance corrections, audit logs, application errors, and workspace setting updates.
+servers:
+  - url: http://localhost:5000
+    description: Local Development Server
+  - url: https://api.clockin.workspace
+    description: Production Server (HTTPS required)
+
+tags:
+  - name: Health
+    description: Liveness and database readiness probes
+  - name: Public Visitors
+    description: Guest registration, returning visitor lookup, and identity confirmation (FR-01 to FR-03, FR-07)
+  - name: Public Attendance
+    description: Guest check-in and check-out operations (FR-04 to FR-06)
+  - name: Auth
+    description: Staff authentication and rotating refresh sessions (FR-08, FR-09)
+  - name: Dashboard
+    description: Receptionist daily/weekly/monthly attendance summary (FR-10, FR-13)
+  - name: Visitors (Staff)
+    description: Staff visitor directory, profile, and visit history (FR-11, FR-12)
+  - name: Attendance (Staff)
+    description: Filtered attendance listing, active sessions, and Super Admin corrections (FR-10, FR-14, FR-17)
+  - name: Reports
+    description: Streaming Excel (.xlsx) report exports (FR-15)
+  - name: Staff (Admin)
+    description: Super Admin staff account lifecycle management (FR-16)
+  - name: Audit Logs (Admin)
+    description: Immutable administrative audit trail (FR-18)
+  - name: App Errors (Admin)
+    description: Captured application errors and triage status (FR-19)
+  - name: Settings
+    description: Workspace configuration (name and IANA timezone) (FR-20)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived (15 min) staff access JWT obtained from `/api/v1/auth/login` or `/api/v1/auth/refresh`.
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+      description: Rotating 7-day HttpOnly refresh token cookie scoped to `/api/v1/auth`.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Invalid input parameters
+            details:
+              nullable: true
+              description: Optional field-level validation issues or context
+
+    PaginationMeta:
+      type: object
+      required: [total, page, limit, totalPages]
+      properties:
+        total:
+          type: integer
+          example: 42
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        totalPages:
+          type: integer
+          example: 5
+
+    Role:
+      type: string
+      enum: [RECEPTIONIST, SUPER_ADMIN]
+
+    ErrorSeverity:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+
+    ErrorStatus:
+      type: string
+      enum: [OPEN, INVESTIGATING, RESOLVED]
+
+    Visitor:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          example: Tobi Lawson
+        phoneNumber:
+          type: string
+          example: "+2348123456789"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Attendance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        visitorId:
+          type: string
+          format: uuid
+        checkIn:
+          type: string
+          format: date-time
+        checkOut:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    StaffPublic:
+      type: object
+      description: Staff account representation (passwordHash is never returned)
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        actorId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          example: ATTENDANCE_CORRECTION
+        recordType:
+          type: string
+          example: ATTENDANCE
+        recordId:
+          type: string
+        oldValues:
+          type: object
+          nullable: true
+        newValues:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        actor:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            fullName:
+              type: string
+            email:
+              type: string
+            role:
+              $ref: '#/components/schemas/Role'
+
+    AppErrorRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        errorType:
+          type: string
+        message:
+          type: string
+          description: Sensitive fields, tokens, credentials, and phone numbers are redacted before storage.
+        severity:
+          $ref: '#/components/schemas/ErrorSeverity'
+        status:
+          $ref: '#/components/schemas/ErrorStatus'
+        stack:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    WorkspaceSettings:
+      type: object
+      properties:
+        workspaceName:
+          type: string
+          example: CLOCK IN Workspace
+        workspaceTimezone:
+          type: string
+          example: Africa/Lagos
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Returns process liveness metadata without hitting the database. Exempt from HTTPS redirect for internal container probes.
+      responses:
+        '200':
+          description: Service process is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                  environment:
+                    type: string
+                  workspace:
+                    type: string
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe (database connectivity check)
+      description: Executes `SELECT 1` against PostgreSQL with a 3-second timeout. Returns 503 if the database is unreachable.
+      responses:
+        '200':
+          description: Service and database are ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+                  database:
+                    type: string
+                    example: connected
+                  timestamp:
+                    type: string
+                    format: date-time
+        '503':
+          description: Database unreachable or timed out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not_ready
+                  database:
+                    type: string
+                    example: disconnected
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/v1/status:
+    get:
+      tags: [Health]
+      summary: API v1 operational status
+      responses:
+        '200':
+          description: API v1 operational
+
+  /api/v1/public/visitors/register:
+    post:
+      tags: [Public Visitors]
+      summary: Register a first-time visitor and automatically check them in (FR-01, FR-02, FR-04)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phoneNumber]
+              properties:
+                fullName:
+                  type: string
+                  minLength: 2
+                  example: Tobi Lawson
+                phoneNumber:
+                  type: string
+                  example: "08123456789"
+      responses:
+        '201':
+          description: Visitor registered and initial attendance session opened
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Phone number is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+
+  /api/v1/public/visitors/lookup:
+    post:
+      tags: [Public Visitors]
+      summary: Look up a returning visitor by phone number (FR-03, FR-07)
+      description: |
+        Rate-limited to 10 requests/minute per IP to prevent phone enumeration.
+        Returns only masked name/phone hints and an HMAC-signed `lookupToken` (contains no plaintext PII).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber]
+              properties:
+                phoneNumber:
+                  type: string
+                  example: "08123456789"
+      responses:
+        '200':
+          description: Returning visitor found (masked details only)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      lookupToken:
+                        type: string
+                      maskedName:
+                        type: string
+                        example: "T*** L*****"
+                      maskedPhone:
+                        type: string
+                        example: "+23481****6789"
+                      hasActiveSession:
+                        type: boolean
+                      activeSession:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                          checkIn:
+                            type: string
+                            format: date-time
+        '404':
+          description: Phone number not found
+        '429':
+          description: Lookup rate limit exceeded
+
+  /api/v1/public/visitors/confirm:
+    post:
+      tags: [Public Visitors]
+      summary: Confirm returning visitor identity (FR-03)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lookupToken, confirmationAnswer]
+              properties:
+                lookupToken:
+                  type: string
+                confirmationAnswer:
+                  type: string
+                  description: Visitor's registered full name (case-insensitive)
+                  example: Tobi Lawson
+      responses:
+        '200':
+          description: Identity confirmed; returns short-lived signed `actionToken`
+        '400':
+          description: Invalid/expired lookup token or mismatched confirmation name
+
+  /api/v1/public/attendance/check-in:
+    post:
+      tags: [Public Attendance]
+      summary: Check in a visitor (FR-04, FR-06)
+      description: Creates a new active attendance session with a server-generated timestamp. Enforces at most one open session per visitor via transaction + PostgreSQL partial unique index.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actionToken:
+                  type: string
+                  description: Signed token returned by `/public/visitors/confirm`
+                visitorId:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Visitor checked in
+        '401':
+          description: Invalid or expired actionToken
+        '409':
+          description: Visitor already has an open active session (FR-06)
+
+  /api/v1/public/attendance/check-out:
+    post:
+      tags: [Public Attendance]
+      summary: Check out of an active attendance session (FR-05)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actionToken:
+                  type: string
+                visitorId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Visitor checked out
+        '400':
+          description: No active open session found
+        '401':
+          description: Invalid or expired actionToken
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Staff sign-in (FR-08)
+      description: Verifies Argon2id password hash, returns a 15-minute JWT access token, and sets a 7-day rotating HttpOnly `refreshToken` cookie. Rate-limited to 10 attempts per 15 minutes per IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Authenticated successfully
+        '401':
+          description: Invalid credentials or deactivated staff account
+        '429':
+          description: Auth rate limit exceeded
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate refresh token and issue new access token
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: New access token issued and refresh cookie rotated
+        '401':
+          description: Missing, revoked, or expired refresh token
+        '429':
+          description: Refresh rate limit exceeded
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out and revoke current refresh session
+      security:
+        - refreshCookie: []
+      responses:
+        '200':
+          description: Session revoked and cookie cleared
+
+  /api/v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get currently authenticated staff profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated staff profile
+        '401':
+          description: Unauthorized
+
+  /api/v1/dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Daily, weekly, and monthly attendance summary (FR-10, FR-13)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Workspace metrics and 5 most recent check-ins today
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/visitors:
+    get:
+      tags: [Visitors (Staff)]
+      summary: Paginated visitor directory with search (FR-11)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: search
+          in: query
+          description: Partial match against visitor full name or phone number
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of visitors
+
+  /api/v1/visitors/{id}:
+    get:
+      tags: [Visitors (Staff)]
+      summary: Visitor profile with weekly and monthly visit counts (FR-12, FR-13)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Visitor profile and visit statistics
+        '404':
+          description: Visitor not found
+
+  /api/v1/visitors/{id}/attendance:
+    get:
+      tags: [Visitors (Staff)]
+      summary: Paginated attendance history for a visitor (FR-12)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated attendance records for the visitor
+        '404':
+          description: Visitor not found
+
+  /api/v1/attendance:
+    get:
+      tags: [Attendance (Staff)]
+      summary: Filtered and paginated attendance records (FR-14)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, CHECKED_OUT]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Filtered paginated attendance sessions
+
+  /api/v1/attendance/active:
+    get:
+      tags: [Attendance (Staff)]
+      summary: List all currently checked-in visitors (FR-10)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Open attendance sessions with visitor summary
+
+  /api/v1/attendance/{id}/correct:
+    patch:
+      tags: [Attendance (Staff)]
+      summary: Correct an attendance record (Super Admin only, FR-17)
+      description: Validates check-out > check-in and no overlapping open sessions; writes an audit log entry inside the same database transaction.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                checkIn:
+                  type: string
+                  format: date-time
+                checkOut:
+                  type: string
+                  format: date-time
+                  nullable: true
+                reason:
+                  type: string
+                  minLength: 5
+      responses:
+        '200':
+          description: Attendance record corrected and audited
+        '400':
+          description: Invalid timestamps or missing reason
+        '403':
+          description: Super Admin role required
+        '409':
+          description: Would create overlapping active session
+
+  /api/v1/reports/export:
+    get:
+      tags: [Reports]
+      summary: Export attendance report to streaming Excel (.xlsx) (FR-15)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [DAILY, WEEKLY, MONTHLY, CUSTOM, VISITOR]
+        - name: date
+          in: query
+          description: Reference date for DAILY, WEEKLY, or MONTHLY exports (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: startDate
+          in: query
+          description: Required for CUSTOM report type
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Required for CUSTOM report type
+          schema:
+            type: string
+            format: date
+        - name: visitorId
+          in: query
+          description: Required for VISITOR report type
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, CHECKED_OUT]
+      responses:
+        '200':
+          description: Streaming `.xlsx` workbook (up to 50,000 rows in 1,000-row batches)
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: attachment; filename="attendance_daily_2026-11-24.xlsx"
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Missing or invalid report parameters
+        '401':
+          description: Unauthorized
+
+  /api/v1/staff:
+    get:
+      tags: [Staff (Admin)]
+      summary: List staff accounts (Super Admin only, FR-16)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            $ref: '#/components/schemas/Role'
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Paginated list of staff accounts (without passwordHash)
+        '403':
+          description: Super Admin role required
+    post:
+      tags: [Staff (Admin)]
+      summary: Create a new staff account (Super Admin only, FR-16)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, email, password, role]
+              properties:
+                fullName:
+                  type: string
+                  minLength: 2
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                role:
+                  $ref: '#/components/schemas/Role'
+                isActive:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Staff account created and audited
+        '409':
+          description: Email already exists
+
+  /api/v1/staff/{id}:
+    get:
+      tags: [Staff (Admin)]
+      summary: Get a single staff account (Super Admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Staff account details
+        '404':
+          description: Staff account not found
+    patch:
+      tags: [Staff (Admin)]
+      summary: Update staff account (Super Admin only, FR-16)
+      description: Prevents demoting or deactivating the last active Super Admin. Revokes active refresh sessions immediately on deactivation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                role:
+                  $ref: '#/components/schemas/Role'
+                isActive:
+                  type: boolean
+      responses:
+        '200':
+          description: Staff account updated and audited
+        '400':
+          description: Cannot demote/deactivate the last active Super Admin
+
+  /api/v1/staff/{id}/deactivate:
+    post:
+      tags: [Staff (Admin)]
+      summary: Deactivate a staff account and revoke sessions (Super Admin only, FR-16)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Staff account deactivated
+        '400':
+          description: Cannot deactivate the last active Super Admin
+
+  /api/v1/audit-logs:
+    get:
+      tags: [Audit Logs (Admin)]
+      summary: List administrative audit logs (Super Admin only, FR-18)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: actorId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: recordType
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Paginated audit log entries
+        '403':
+          description: Super Admin role required
+
+  /api/v1/app-errors:
+    get:
+      tags: [App Errors (Admin)]
+      summary: List captured application errors (Super Admin only, FR-19)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ErrorStatus'
+        - name: severity
+          in: query
+          schema:
+            $ref: '#/components/schemas/ErrorSeverity'
+      responses:
+        '200':
+          description: Paginated application error records
+        '403':
+          description: Super Admin role required
+
+  /api/v1/app-errors/{id}/resolve:
+    patch:
+      tags: [App Errors (Admin)]
+      summary: Update application error triage status (Super Admin only, FR-19)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: '#/components/schemas/ErrorStatus'
+                  default: RESOLVED
+      responses:
+        '200':
+          description: Error status updated
+        '404':
+          description: Error record not found
+
+  /api/v1/settings:
+    get:
+      tags: [Settings]
+      summary: Get workspace settings (any authenticated staff)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Workspace name and configured IANA timezone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/WorkspaceSettings'
+    patch:
+      tags: [Settings]
+      summary: Update workspace settings (Super Admin only, FR-20)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                workspaceName:
+                  type: string
+                  minLength: 2
+                workspaceTimezone:
+                  type: string
+                  description: Valid IANA timezone identifier (e.g. Africa/Lagos, UTC, America/New_York)
+      responses:
+        '200':
+          description: Workspace settings updated and audited
+        '400':
+          description: Invalid IANA timezone identifier
+        '403':
+          description: Super Admin role required

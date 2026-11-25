@@ -1,0 +1,640 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Menu, X, CheckCircle2, Clock, Calendar, AlertCircle } from 'lucide-react';
+import { apiClient } from '../../../lib/api-client';
+import { formatDayAndDate, formatTime } from '../../../lib/format-date';
+import { Button, Input } from '../../../components/ui';
+
+type Mode =
+  | 'new'
+  | 'returning-lookup'
+  | 'returning-confirm'
+  | 'returning-action'
+  | 'returning-checkout'
+  | 'success';
+
+interface LookupData {
+  lookupToken: string;
+  checkOutToken?: string | null;
+  maskedName: string;
+  maskedPhone: string;
+  hasActiveSession: boolean;
+  activeSession?: { id: string; checkIn: string } | null;
+}
+
+interface ActionData {
+  actionToken: string;
+  visitorId: string;
+  fullName: string;
+  hasActiveSession: boolean;
+}
+
+const HUB_NAME = 'Dare Adeboye Innovation Hub';
+
+export default function CheckInPage() {
+  const [mode, setMode] = useState<Mode>('new');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // New Visitor Form State
+  const [fullName, setFullName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+
+  // Returning Visitor State
+  const [lookupPhone, setLookupPhone] = useState('');
+  const [lookupResult, setLookupResult] = useState<LookupData | null>(null);
+  const [confirmationName, setConfirmationName] = useState('');
+  const [confirmedAction, setConfirmedAction] = useState<ActionData | null>(null);
+
+  // Done / Full-Screen Welcome State
+  const [successInfo, setSuccessInfo] = useState<{
+    title: string;
+    reminder: string;
+    dayLabel: string;
+    timestamp: string;
+    status: 'CHECKED_IN' | 'CHECKED_OUT';
+  } | null>(null);
+
+  const [countdown, setCountdown] = useState(12);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (mode === 'success') {
+      setCountdown(12);
+      timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            resetFlow();
+            return 12;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [mode]);
+
+  const resetFlow = () => {
+    setMode('new');
+    setFullName('');
+    setPhoneNumber('');
+    setLookupPhone('');
+    setLookupResult(null);
+    setConfirmationName('');
+    setConfirmedAction(null);
+    setSuccessInfo(null);
+    setErrorMessage(null);
+  };
+
+  const isReturningFlow =
+    mode === 'returning-lookup' ||
+    mode === 'returning-confirm' ||
+    mode === 'returning-action' ||
+    mode === 'returning-checkout';
+
+  // 1. Register new visitor & clock in
+  const handleRegister = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      const res = await apiClient<any>('/api/v1/public/visitors/register', {
+        method: 'POST',
+        body: JSON.stringify({ fullName, phoneNumber }),
+      });
+
+      const now = new Date(res.data?.attendance?.checkIn || Date.now());
+
+      setSuccessInfo({
+        title: `Done! Welcome to ${HUB_NAME}`,
+        reminder:
+          'Please make sure you always clock in whenever you arrive, and remember that you must sign out / clock out before leaving.',
+        dayLabel: formatDayAndDate(now, { longMonth: true }),
+        timestamp: formatTime(now),
+        status: 'CHECKED_IN',
+      });
+      setMode('success');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to complete registration.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Returning visitor phone lookup
+  //    - Already signed in -> skip name verification, go directly to phone-only sign-out
+  //    - Not signed in -> verify name before signing in
+  const handleLookup = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      const res = await apiClient<LookupData>('/api/v1/public/visitors/lookup', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: lookupPhone }),
+      });
+
+      const data = res.data!;
+      setLookupResult(data);
+
+      if (data.hasActiveSession && data.checkOutToken) {
+        setMode('returning-checkout');
+      } else {
+        setMode('returning-confirm');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Visitor not found.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. Returning visitor name confirmation (only required when signing in)
+  const handleConfirmIdentity = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      const res = await apiClient<ActionData>('/api/v1/public/visitors/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          lookupToken: lookupResult!.lookupToken,
+          confirmationAnswer: confirmationName,
+        }),
+      });
+
+      setConfirmedAction(res.data!);
+      setMode('returning-action');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Confirmation failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Returning visitor Clock In (for the day / next day)
+  const handleClockIn = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      const res = await apiClient<any>('/api/v1/public/attendance/check-in', {
+        method: 'POST',
+        body: JSON.stringify({ actionToken: confirmedAction!.actionToken }),
+      });
+
+      const now = new Date(res.data?.checkIn || Date.now());
+
+      setSuccessInfo({
+        title: `Done! Welcome once again to ${HUB_NAME}`,
+        reminder:
+          'Please make sure you always clock in whenever you arrive, and remember that you must sign out / clock out before leaving.',
+        dayLabel: formatDayAndDate(now, { longMonth: true }),
+        timestamp: formatTime(now),
+        status: 'CHECKED_IN',
+      });
+      setMode('success');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to clock in.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 5. Returning visitor Clock Out (phone-only via checkOutToken, no name step needed)
+  const handleDirectClockOut = async () => {
+    setErrorMessage(null);
+    setLoading(true);
+
+    try {
+      const token = lookupResult?.checkOutToken || confirmedAction?.actionToken;
+      const res = await apiClient<any>('/api/v1/public/attendance/check-out', {
+        method: 'POST',
+        body: JSON.stringify({ actionToken: token }),
+      });
+
+      const now = new Date(res.data?.checkOut || Date.now());
+
+      setSuccessInfo({
+        title: `Done! You have signed out of ${HUB_NAME}`,
+        reminder: 'Thank you for visiting today. Please make sure you clock in on your next visit.',
+        dayLabel: formatDayAndDate(now, { longMonth: true }),
+        timestamp: formatTime(now),
+        status: 'CHECKED_OUT',
+      });
+      setMode('success');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to clock out.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Visitor-only sidebar (zero staff login links!)
+  const renderSidebarContent = () => (
+    <>
+      <div>
+        <Link href="/" className="flex items-center gap-3 px-2 mb-7">
+          <div className="w-9 h-9 rounded-xl bg-[#34526E] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+            D
+          </div>
+          <div className="min-w-0">
+            <div className="font-bold text-[#111827] text-xs leading-snug">{HUB_NAME}</div>
+            <div className="text-[11px] text-[#6B7A8C]">Our visitors</div>
+          </div>
+        </Link>
+
+        <nav className="space-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode('new');
+              setErrorMessage(null);
+              setMobileNavOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition text-left ${
+              mode === 'new'
+                ? 'bg-[#EEF3F7] text-[#1E3A54] font-semibold'
+                : 'text-[#6B7A8C] hover:bg-[#F3F6F9] hover:text-[#1F2937] font-medium'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                mode === 'new' ? 'bg-[#34526E]' : 'bg-[#CBD5E1]'
+              }`}
+            />
+            <span>New visitor</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setMode('returning-lookup');
+              setErrorMessage(null);
+              setMobileNavOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-[13.5px] transition text-left ${
+              isReturningFlow
+                ? 'bg-[#EEF3F7] text-[#1E3A54] font-semibold'
+                : 'text-[#6B7A8C] hover:bg-[#F3F6F9] hover:text-[#1F2937] font-medium'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                isReturningFlow ? 'bg-[#34526E]' : 'bg-[#CBD5E1]'
+              }`}
+            />
+            <span>Returning visitor</span>
+          </button>
+        </nav>
+      </div>
+
+      <div className="border-t border-[#E6ECF2] pt-4 mt-4 px-2">
+        <div className="text-[11px] font-semibold text-[#1F2937]">Today</div>
+        <div className="text-[11px] text-[#6B7A8C] mt-0.5">{formatDayAndDate(new Date())}</div>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#F7F9FB]">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-white border-b border-[#E6ECF2] px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-[#34526E] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+            D
+          </div>
+          <span className="font-bold text-[#111827] text-xs truncate">{HUB_NAME}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen((prev) => !prev)}
+          aria-label="Toggle navigation"
+          className="p-2 rounded-lg text-[#475569] hover:bg-[#EEF3F7]"
+        >
+          {mobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Mobile Drawer */}
+      {mobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <div
+            className="fixed inset-0 bg-[#111827]/35"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+          <aside className="relative w-64 max-w-[82vw] bg-white h-full p-4 flex flex-col justify-between shadow-xl z-50 border-r border-[#E6ECF2]">
+            {renderSidebarContent()}
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Left Sidebar */}
+      <aside className="hidden md:flex w-60 bg-white border-r border-[#E6ECF2] flex-col justify-between p-4 flex-shrink-0 min-h-screen sticky top-0 h-screen">
+        {renderSidebarContent()}
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-5 sm:p-8 lg:p-10 flex flex-col justify-center items-center w-full">
+        <div
+          className={`w-full ${
+            mode === 'returning-action' || mode === 'returning-checkout'
+              ? 'max-w-5xl'
+              : 'max-w-2xl'
+          }`}
+        >
+          {/* Clean Page Header */}
+          {mode !== 'success' && (
+            <div className="mb-6">
+              <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[#6B7A8C] mb-1">
+                {HUB_NAME.toUpperCase()} &middot; OUR VISITORS
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111827]">
+                Clock In
+              </h1>
+            </div>
+          )}
+
+          {/* Main White Card */}
+          <div className="bg-white rounded-2xl border border-[#E6ECF2] p-6 sm:p-8">
+            {errorMessage && (
+              <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                {errorMessage}
+              </div>
+            )}
+
+            {/* 1. NEW VISITOR FORM */}
+            {mode === 'new' && (
+              <form onSubmit={handleRegister} className="space-y-5">
+                <Input
+                  label="Full Name"
+                  type="text"
+                  required
+                  placeholder="e.g. Adebayo Ogunlesi"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+
+                <Input
+                  label="Phone Number"
+                  type="tel"
+                  required
+                  placeholder="e.g. 0803 123 4567"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  helperText="Used to recognize you on future visits without registering again."
+                />
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <Button type="button" variant="secondary" onClick={resetFlow}>
+                    Clear
+                  </Button>
+                  <Button type="submit" isLoading={loading} className="px-6 py-2.5">
+                    {loading ? 'Clocking in...' : 'Clock In'}
+                  </Button>
+                </div>
+
+                {/* Highly Visible Returning Visitor Callout */}
+                <div className="pt-5 border-t border-[#E6ECF2]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('returning-lookup');
+                      setErrorMessage(null);
+                    }}
+                    className="w-full p-4 rounded-xl bg-[#EEF3F7] hover:bg-[#E2ECF4] border border-[#DCE6EE] text-center transition"
+                  >
+                    <span className="text-base sm:text-lg font-bold text-[#1E3A54]">
+                      Already registered? Returning visitor &rarr;
+                    </span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* 2. RETURNING VISITOR: PHONE LOOKUP */}
+            {mode === 'returning-lookup' && (
+              <form onSubmit={handleLookup} className="space-y-5">
+                <Input
+                  label="Enter Your Phone Number"
+                  type="tel"
+                  required
+                  autoFocus
+                  placeholder="e.g. 0803 123 4567"
+                  value={lookupPhone}
+                  onChange={(e) => setLookupPhone(e.target.value)}
+                  helperText="Already clocked in today? Enter your phone number to sign out directly."
+                />
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <Button type="button" variant="secondary" onClick={resetFlow}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" isLoading={loading} className="px-6 py-2.5">
+                    {loading ? 'Searching...' : 'Continue'}
+                  </Button>
+                </div>
+
+                <div className="pt-5 border-t border-[#E6ECF2]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('new');
+                      setErrorMessage(null);
+                    }}
+                    className="w-full p-3.5 rounded-xl bg-[#F9FBFC] hover:bg-[#EEF3F7] border border-[#E6ECF2] text-center transition"
+                  >
+                    <span className="text-base font-semibold text-[#34526E]">
+                      &larr; First time visiting? Register here
+                    </span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* 3A. ALREADY SIGNED IN TODAY -> DIRECT PHONE-ONLY SIGN OUT (NO NAME CHECK) */}
+            {mode === 'returning-checkout' && lookupResult && (
+              <div className="space-y-8 text-center py-6 sm:py-10">
+                <div className="p-8 sm:p-12 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] space-y-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#34526E]">
+                    CURRENTLY SIGNED IN
+                  </div>
+                  <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#111827] leading-[1.1] tracking-tight">
+                    Ready to Sign Out?
+                  </h2>
+                  <p className="text-base text-[#475569]">
+                    Phone: <span className="font-mono font-semibold">{lookupResult.maskedPhone}</span>
+                  </p>
+                  <div className="flex flex-wrap justify-center items-center gap-5 text-base text-[#475569] pt-1">
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-[#34526E]" />
+                      {formatDayAndDate(new Date(), { longMonth: true })}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#34526E]" />
+                      {formatTime(new Date())}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <Button
+                    type="button"
+                    onClick={handleDirectClockOut}
+                    isLoading={loading}
+                    className="w-full sm:w-auto px-10 py-4 text-lg bg-amber-600 hover:bg-amber-700"
+                  >
+                    {loading ? 'Signing Out...' : 'Clock Out / Sign Out'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={resetFlow}
+                    className="px-6 py-4 text-base"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 3B. RETURNING VISITOR NOT YET SIGNED IN -> CONFIRM NAME TO SIGN IN */}
+            {mode === 'returning-confirm' && lookupResult && (
+              <form onSubmit={handleConfirmIdentity} className="space-y-5">
+                <div className="p-4 rounded-xl bg-[#EEF3F7] border border-[#DCE6EE] flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-[#34526E]">Profile Found</div>
+                    <div className="text-lg font-bold text-[#111827] mt-0.5">
+                      {lookupResult.maskedName}
+                    </div>
+                    <div className="text-xs text-[#6B7A8C]">{lookupResult.maskedPhone}</div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-[#475569] border border-[#DCE3EB]">
+                    Clocked Out
+                  </span>
+                </div>
+
+                <Input
+                  label="Confirm Your Full Name to Clock In"
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="Type your registered full name"
+                  value={confirmationName}
+                  onChange={(e) => setConfirmationName(e.target.value)}
+                />
+
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#E6ECF2]">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setMode('returning-lookup')}
+                  >
+                    Back
+                  </Button>
+                  <Button type="submit" isLoading={loading} className="px-6 py-2.5">
+                    {loading ? 'Confirming...' : 'Confirm Name'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {/* 4. RETURNING VISITOR CONFIRMED -> CLOCK IN FOR TODAY (NO NAME IN WELCOME) */}
+            {mode === 'returning-action' && confirmedAction && (
+              <div className="space-y-8 text-center py-6 sm:py-10">
+                <div className="p-8 sm:p-12 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] space-y-4">
+                  <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#111827] leading-[1.1] tracking-tight">
+                    Welcome to {HUB_NAME}
+                  </h2>
+                  <div className="flex flex-wrap justify-center items-center gap-5 text-base sm:text-lg text-[#475569] pt-2">
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-[#34526E]" />
+                      {formatDayAndDate(new Date(), { longMonth: true })}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#34526E]" />
+                      {formatTime(new Date())}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-base sm:text-lg text-amber-900 flex items-center justify-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-700 flex-shrink-0" />
+                  <span>
+                    Click below to clock in for today. Remember that you must sign out / clock out when leaving.
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+                  <Button
+                    type="button"
+                    onClick={handleClockIn}
+                    isLoading={loading}
+                    className="w-full sm:w-auto px-10 py-4 text-lg"
+                  >
+                    {loading ? 'Clocking In...' : 'Clock In for Today'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={resetFlow}
+                    className="px-6 py-4 text-base"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 5. DONE / FULL-SCREEN WELCOME CONFIRMATION (NO NAME) */}
+            {mode === 'success' && successInfo && (
+              <div className="fixed inset-0 z-50 bg-[#F7F9FB] flex flex-col justify-center items-center p-6 sm:p-12 overflow-y-auto">
+                <div className="w-full max-w-6xl bg-white rounded-3xl border border-[#E6ECF2] p-8 sm:p-14 lg:p-20 text-center space-y-8 shadow-sm">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#34526E] text-white flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12" />
+                  </div>
+
+                  <div className="space-y-6">
+                    <h2 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold text-[#111827] leading-[1.08] tracking-tight">
+                      {successInfo.title}
+                    </h2>
+
+                    <div className="p-5 sm:p-6 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] text-lg sm:text-2xl font-medium text-[#1E3A54] max-w-4xl mx-auto leading-relaxed">
+                      {successInfo.reminder}
+                    </div>
+                  </div>
+
+                  <div className="inline-flex flex-wrap justify-center items-center gap-5 px-6 py-3.5 bg-[#F9FBFC] border border-[#E6ECF2] rounded-2xl text-base sm:text-lg font-semibold text-[#1F2937]">
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-[#34526E]" />
+                      {successInfo.dayLabel}
+                    </span>
+                    <span className="text-[#CBD5E1]">|</span>
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-[#34526E]" />
+                      {successInfo.timestamp}
+                    </span>
+                  </div>
+
+                  <div className="pt-4">
+                    <Button type="button" onClick={resetFlow} className="px-12 py-4 text-lg">
+                      Done ({countdown}s)
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

@@ -1,0 +1,229 @@
+import { visitorsRepository, VisitorsRepository } from './visitors.repository.js';
+import { attendanceService } from '../attendance/attendance.service.js';
+import { normalizePhoneNumber, maskPhoneNumber, maskName } from '../../shared/utils/phone.js';
+import { signLookupToken, verifyLookupToken, hmacDigest, safeCompare } from '../../shared/utils/crypto.js';
+import { parsePagination, createPaginatedResponse } from '../../shared/utils/pagination.js';
+import { env } from '../../config/env.js';
+import { ConflictError, NotFoundError, BadRequestError } from '../../shared/errors/app-error.js';
+
+export interface RegisterVisitorDto {
+  fullName: string;
+  phoneNumber: string;
+}
+
+export class VisitorsService {
+  constructor(private repo: VisitorsRepository = visitorsRepository) {}
+
+  /**
+   * Registers a new visitor and immediately creates their initial check-in session (FR-01, FR-04).
+   */
+  async register(data: RegisterVisitorDto) {
+    const normalizedPhone = normalizePhoneNumber(data.phoneNumber);
+
+    const existingVisitor = await this.repo.findByPhoneNumber(normalizedPhone);
+    if (existingVisitor) {
+      throw new ConflictError(
+        'A visitor with this phone number is already registered. Please proceed to returning visitor check-in.',
+      );
+    }
+
+    const visitor = await this.repo.create({
+      fullName: data.fullName.trim(),
+      phoneNumber: normalizedPhone,
+    });
+
+    const attendance = await attendanceService.checkIn(visitor.id);
+
+    return {
+      visitor: {
+        id: visitor.id,
+        fullName: visitor.fullName,
+        phoneNumber: visitor.phoneNumber,
+      },
+      attendance: {
+        id: attendance.id,
+        checkIn: attendance.checkIn,
+        status: 'CHECKED_IN',
+      },
+    };
+  }
+
+  /**
+   * Looks up returning visitor by phone number (FR-03).
+   */
+  async lookup(phoneNumber: string) {
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const visitor = await this.repo.findByPhoneNumber(normalizedPhone);
+
+    if (!visitor) {
+      throw new NotFoundError(
+        'No registered visitor found with this phone number. Please register as a new visitor.',
+      );
+    }
+
+    const activeSession = await attendanceService.getActiveSession(visitor.id);
+
+    // Privacy: never store plaintext fullName or phoneNumber inside the base64url lookupToken.
+    // Store only an HMAC digest of the normalized full name for constant-time confirmation.
+    const nameDigest = hmacDigest(
+      visitor.fullName.trim().toLowerCase(),
+      env.JWT_ACCESS_SECRET,
+    );
+
+    const lookupToken = signLookupToken(
+      {
+        visitorId: visitor.id,
+        nameDigest,
+      },
+      env.JWT_ACCESS_SECRET,
+      300,
+    );
+
+    // If visitor is already signed in, issue a scoped check-out-only token so they can
+    // sign out with phone number alone (name verification is required only for signing in).
+    const checkOutToken = activeSession
+      ? signLookupToken(
+          {
+            visitorId: visitor.id,
+            confirmed: true,
+            scope: 'CHECK_OUT_ONLY',
+          },
+          env.JWT_ACCESS_SECRET,
+          300,
+        )
+      : null;
+
+    return {
+      lookupToken,
+      checkOutToken,
+      maskedName: maskName(visitor.fullName),
+      maskedPhone: maskPhoneNumber(visitor.phoneNumber),
+      hasActiveSession: Boolean(activeSession),
+      activeSession: activeSession
+        ? {
+            id: activeSession.id,
+            checkIn: activeSession.checkIn,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Confirms visitor identity by validating confirmation name against the signed token's HMAC digest.
+   */
+  async confirm(lookupToken: string, confirmationAnswer: string) {
+    const payload = verifyLookupToken<{
+      visitorId: string;
+      nameDigest: string;
+    }>(lookupToken, env.JWT_ACCESS_SECRET);
+
+    if (!payload || !payload.visitorId || !payload.nameDigest) {
+      throw new BadRequestError('Invalid or expired lookup session. Please search your phone number again.');
+    }
+
+    const answerDigest = hmacDigest(
+      confirmationAnswer.trim().toLowerCase(),
+      env.JWT_ACCESS_SECRET,
+    );
+    const isNameMatch = safeCompare(payload.nameDigest, answerDigest);
+
+    if (!isNameMatch) {
+      throw new BadRequestError('Confirmation name does not match the registered record. Please try again.');
+    }
+
+    const activeSession = await attendanceService.getActiveSession(payload.visitorId);
+
+    const actionToken = signLookupToken(
+      {
+        visitorId: payload.visitorId,
+        confirmed: true,
+      },
+      env.JWT_ACCESS_SECRET,
+      300,
+    );
+
+    return {
+      actionToken,
+      visitorId: payload.visitorId,
+      fullName: confirmationAnswer.trim(),
+      hasActiveSession: Boolean(activeSession),
+      activeSession: activeSession
+        ? {
+            id: activeSession.id,
+            checkIn: activeSession.checkIn,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Staff directory listing with debounced partial search by name or phone (FR-11).
+   */
+  async listVisitors(query: Record<string, unknown>) {
+    const pagination = parsePagination(query, 10, 100);
+    const search = typeof query.search === 'string' ? query.search : undefined;
+
+    const [visitors, total] = await this.repo.findManyPaginated({
+      skip: pagination.skip,
+      take: pagination.take,
+      search,
+    });
+
+    return createPaginatedResponse(visitors, total, pagination.page, pagination.limit);
+  }
+
+  /**
+   * Staff visitor profile view with calculated weekly and monthly visit counts (FR-12, FR-13).
+   */
+  async getVisitorProfile(visitorId: string, timezone = env.WORKSPACE_TIMEZONE) {
+    const visitor = await this.repo.findById(visitorId);
+    if (!visitor) {
+      throw new NotFoundError('Visitor profile not found.');
+    }
+
+    const stats = await this.repo.getVisitorStats(visitorId, timezone);
+
+    return {
+      visitor: {
+        id: visitor.id,
+        fullName: visitor.fullName,
+        phoneNumber: visitor.phoneNumber,
+        createdAt: visitor.createdAt,
+      },
+      stats: {
+        totalVisits: stats.totalVisits,
+        thisWeekVisits: stats.thisWeekVisits,
+        thisMonthVisits: stats.thisMonthVisits,
+        lastVisitDate: stats.lastVisit ? stats.lastVisit.checkIn : null,
+        currentlyCheckedIn: stats.activeSession !== null,
+        activeSession: stats.activeSession
+          ? {
+              id: stats.activeSession.id,
+              checkIn: stats.activeSession.checkIn,
+            }
+          : null,
+      },
+    };
+  }
+
+  /**
+   * Staff visitor historical attendance records (FR-12).
+   */
+  async getVisitorAttendanceHistory(visitorId: string, query: Record<string, unknown>) {
+    const visitor = await this.repo.findById(visitorId);
+    if (!visitor) {
+      throw new NotFoundError('Visitor not found.');
+    }
+
+    const pagination = parsePagination(query, 10, 100);
+    const [attendances, total] = await this.repo.findAttendanceHistoryPaginated(
+      visitorId,
+      pagination.skip,
+      pagination.take,
+    );
+
+    return createPaginatedResponse(attendances, total, pagination.page, pagination.limit);
+  }
+}
+
+export const visitorsService = new VisitorsService();
