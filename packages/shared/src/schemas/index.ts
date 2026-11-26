@@ -9,10 +9,8 @@ export const RegisterVisitorSchema = z.object({
   phoneNumber: z
     .string()
     .trim()
-    .optional()
-    .refine((val) => !val || (val.length >= 7 && val.length <= 20), {
-      message: 'Invalid phone number',
-    }),
+    .min(7, 'Phone number is required')
+    .max(20, 'Invalid phone number'),
   hostName: z.string().trim().max(150).optional(),
 });
 

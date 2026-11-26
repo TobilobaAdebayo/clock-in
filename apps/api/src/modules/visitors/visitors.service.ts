@@ -8,7 +8,7 @@ import { ConflictError, NotFoundError, BadRequestError } from '../../shared/erro
 
 export interface RegisterVisitorDto {
   fullName: string;
-  phoneNumber?: string | null;
+  phoneNumber: string;
   hostName?: string;
 }
 
@@ -23,28 +23,21 @@ export class VisitorsService {
   constructor(private repo: VisitorsRepository = visitorsRepository) {}
 
   /**
-   * Registers a new visitor (phone number optional) and immediately creates their initial check-in session (FR-01, FR-04).
+   * Registers a new visitor via the public portal (phone number required) and immediately creates their initial check-in session (FR-01, FR-04).
    */
   async register(data: RegisterVisitorDto) {
     const cleanName = data.fullName.trim();
     const rawPhone = data.phoneNumber?.trim();
-    let normalizedPhone: string | null = null;
+    if (!rawPhone) {
+      throw new BadRequestError('Phone number is required to register.');
+    }
 
-    if (rawPhone) {
-      normalizedPhone = normalizePhoneNumber(rawPhone);
-      const existingVisitor = await this.repo.findByPhoneNumber(normalizedPhone);
-      if (existingVisitor) {
-        throw new ConflictError(
-          'A visitor with this phone number is already registered. Please proceed to returning visitor check-in.',
-        );
-      }
-    } else {
-      const sameNameVisitors = await this.repo.findByFullName(cleanName);
-      if (sameNameVisitors.some((v) => !v.phoneNumber)) {
-        throw new ConflictError(
-          'A visitor with this name is already registered. Please proceed to returning visitor check-in.',
-        );
-      }
+    const normalizedPhone = normalizePhoneNumber(rawPhone);
+    const existingVisitor = await this.repo.findByPhoneNumber(normalizedPhone);
+    if (existingVisitor) {
+      throw new ConflictError(
+        'A visitor with this phone number is already registered. Please proceed to returning visitor check-in.',
+      );
     }
 
     const visitor = await this.repo.create({

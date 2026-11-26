@@ -165,7 +165,7 @@ function CheckInFlow() {
         method: 'POST',
         body: JSON.stringify({
           fullName,
-          ...(phoneNumber.trim() ? { phoneNumber: phoneNumber.trim() } : {}),
+          phoneNumber: phoneNumber.trim(),
           hostName: newHostName.trim(),
         }),
       });
@@ -371,12 +371,12 @@ function CheckInFlow() {
                   />
 
                   <Input
-                    label="Phone Number (Optional)"
+                    label="Phone Number"
                     type="tel"
+                    required
                     placeholder="e.g. 0803 123 4567"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
-                    helperText="Optional. Makes future visits faster."
                   />
                 </div>
 

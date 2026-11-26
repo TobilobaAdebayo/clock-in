@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, SlidersHorizontal, UserPlus, X } from 'lucide-react';
+import { LogOut, Search, SlidersHorizontal, UserPlus, X } from 'lucide-react';
 import { apiClient } from '../../lib/api-client';
 import { useAuth } from '../../lib/auth-context';
 import { formatDayAndDate, formatTime } from '../../lib/format-date';
@@ -43,16 +43,19 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
   const [correctError, setCorrectError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Receptionist Manual Check-In Popup Modal state
+  // Staff Manual Clock-In / Clock-Out state (Receptionist & Super Admin)
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualFullName, setManualFullName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [manualHostName, setManualHostName] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+  const [clockingOutId, setClockingOutId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const canCorrect = user?.role === 'SUPER_ADMIN';
-  const showManualCheckIn = user?.role === 'RECEPTIONIST' || basePath === '/staff';
+  const showManualCheckIn =
+    user?.role === 'RECEPTIONIST' || user?.role === 'SUPER_ADMIN';
 
   const fetchAttendance = async (page = 1) => {
     try {
@@ -131,6 +134,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
   const handleManualCheckInSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setManualError(null);
+    setActionError(null);
     setSuccessMsg(null);
 
     try {
@@ -144,12 +148,30 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         }),
       });
       setShowManualModal(false);
-      setSuccessMsg(`${manualFullName.trim()} has been manually checked in.`);
+      setSuccessMsg(`${manualFullName.trim()} has been clocked in.`);
       fetchAttendance(1);
     } catch (err: any) {
-      setManualError(err.message || 'Failed to complete manual check-in.');
+      setManualError(err.message || 'Failed to clock in visitor.');
     } finally {
       setManualSaving(false);
+    }
+  };
+
+  const handleManualClockOut = async (item: AttendanceItem) => {
+    setActionError(null);
+    setSuccessMsg(null);
+    setClockingOutId(item.id);
+
+    try {
+      await apiClient(`/api/v1/attendance/${item.id}/manual-check-out`, {
+        method: 'POST',
+      });
+      setSuccessMsg(`${item.visitor.fullName} has been clocked out.`);
+      fetchAttendance(meta.page);
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to clock out visitor.');
+    } finally {
+      setClockingOutId(null);
     }
   };
 
@@ -158,12 +180,12 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
       <PageHeader
         eyebrow="DARE ADEBOYE INNOVATION HUB"
         title="Attendance Records"
-        description="View and filter visitor check-in and check-out history."
+        description="View and filter visitor clock-in and clock-out history."
         actions={
           showManualCheckIn ? (
             <Button type="button" onClick={openManualCheckInModal}>
               <UserPlus className="w-4 h-4" />
-              Manual Check-In
+              Manual Clock In
             </Button>
           ) : undefined
         }
@@ -172,6 +194,12 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
       {successMsg && (
         <div className="p-3.5 bg-emerald-50 text-emerald-800 rounded-xl text-sm font-medium border border-emerald-200">
           {successMsg}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="p-3.5 bg-red-50 text-red-700 rounded-xl text-sm font-medium border border-red-200">
+          {actionError}
         </div>
       )}
 
@@ -214,11 +242,10 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
               onClick={() => setShowFilters((prev) => !prev)}
               aria-label="Toggle date filters"
               title="Filter attendance records"
-              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg border text-sm font-medium transition flex-shrink-0 ${
-                showFilters || activeFilterCount > 0
-                  ? 'border-[#34526E] bg-[#EEF3F7] text-[#1E3A54]'
-                  : 'border-[#DCE3EB] bg-white text-[#475569] hover:bg-[#F7F9FB]'
-              }`}
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg border text-sm font-medium transition flex-shrink-0 ${showFilters || activeFilterCount > 0
+                ? 'border-[#34526E] bg-[#EEF3F7] text-[#1E3A54]'
+                : 'border-[#DCE3EB] bg-white text-[#475569] hover:bg-[#F7F9FB]'
+                }`}
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span className="hidden sm:inline">Filter</span>
@@ -285,19 +312,19 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
                 <th className="px-6 py-3.5">Time In</th>
                 <th className="px-6 py-3.5">Time Out</th>
                 <th className="px-6 py-3.5">Status</th>
-                {canCorrect && <th className="px-6 py-3.5 text-right">Edit</th>}
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
               {loading ? (
                 <tr>
-                  <td colSpan={canCorrect ? 8 : 7} className="px-6 py-8 text-center text-[#6B7A8C]">
+                  <td colSpan={8} className="px-6 py-8 text-center text-[#6B7A8C]">
                     Loading attendance records...
                   </td>
                 </tr>
               ) : records.length === 0 ? (
                 <tr>
-                  <td colSpan={canCorrect ? 8 : 7} className="px-6 py-8 text-center text-[#6B7A8C]">
+                  <td colSpan={8} className="px-6 py-8 text-center text-[#6B7A8C]">
                     No matching attendance records found.
                   </td>
                 </tr>
@@ -323,22 +350,38 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
                     </td>
                     <td className="px-6 py-4">
                       {item.checkOut ? (
-                        <Badge tone="neutral">Checked Out</Badge>
+                        <Badge tone="neutral">Clocked Out</Badge>
                       ) : (
                         <Badge tone="success">Active</Badge>
                       )}
                     </td>
-                    {canCorrect && (
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openCorrectionModal(item)}
-                          className="text-xs font-semibold text-[#34526E] hover:underline"
-                        >
-                          Correct
-                        </button>
-                      </td>
-                    )}
+                    <td className="px-6 py-4 text-right">
+                      <div className="inline-flex items-center justify-end gap-3">
+                        {!item.checkOut && showManualCheckIn && (
+                          <button
+                            type="button"
+                            disabled={clockingOutId === item.id}
+                            onClick={() => handleManualClockOut(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            {clockingOutId === item.id ? 'Clocking out...' : 'Clock Out'}
+                          </button>
+                        )}
+                        {canCorrect && (
+                          <button
+                            type="button"
+                            onClick={() => openCorrectionModal(item)}
+                            className="text-xs font-semibold text-[#34526E] hover:underline"
+                          >
+                            Correct
+                          </button>
+                        )}
+                        {item.checkOut && !canCorrect && (
+                          <span className="text-xs text-[#94A3B8]">—</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -425,11 +468,11 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         </form>
       </Modal>
 
-      {/* Receptionist Manual Check-In Popup Modal */}
+      {/* Staff Manual Clock-In Popup Modal (Receptionist & Super Admin) */}
       <Modal
         open={showManualModal}
-        title="Manual Check-In"
-        subtitle="Only Full Name is required. Works for both new and returning visitors."
+        title="Manual Clock In"
+        subtitle="Only Full Name is required. Phone number is optional and works for both new and returning visitors."
         onClose={() => setShowManualModal(false)}
       >
         {manualError && (

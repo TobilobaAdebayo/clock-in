@@ -85,6 +85,18 @@ describe('Public Visitor Check-In & Check-Out Flow (M2 Integration)', () => {
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
+
+    it('requires a phone number when registering through the public landing portal', async () => {
+      const res = await request(app)
+        .post('/api/v1/public/visitors/register')
+        .send({
+          fullName: 'Tobi Lawson',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
   });
 
   describe('FR-03 & FR-07: Returning Visitor Lookup & Privacy Protection', () => {
