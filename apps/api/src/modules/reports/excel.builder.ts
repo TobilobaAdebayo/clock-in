@@ -10,7 +10,7 @@ export interface AttendanceExportRow {
   checkOut: Date | null;
   visitor: {
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
   };
 }
 
@@ -89,7 +89,7 @@ export class ExcelReportBuilder {
     const row = worksheet.addRow({
       sn: serialNumber,
       visitorName: record.visitor.fullName,
-      phoneNumber: record.visitor.phoneNumber,
+      phoneNumber: record.visitor.phoneNumber || '—',
       hostName: record.hostName || '—',
       attendanceDate: dateFormatted,
       timeIn: timeInFormatted,

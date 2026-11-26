@@ -28,7 +28,7 @@ interface DashboardData {
     visitor: {
       id: string;
       fullName: string;
-      phoneNumber: string;
+      phoneNumber: string | null;
     };
   }>;
 }
@@ -76,7 +76,7 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
       if (hq && !(item.hostName || '').toLowerCase().includes(hq)) return false;
       if (q) {
         const matchesName = item.visitor.fullName.toLowerCase().includes(q);
-        const matchesPhone = item.visitor.phoneNumber.toLowerCase().includes(q);
+        const matchesPhone = (item.visitor.phoneNumber || '').toLowerCase().includes(q);
         const matchesHost = (item.hostName || '').toLowerCase().includes(q);
         if (!matchesName && !matchesPhone && !matchesHost) return false;
       }
@@ -297,7 +297,7 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
                       </Link>
                     </td>
                     <td className="px-6 py-4 font-mono text-xs text-[#475569]">
-                      {item.visitor.phoneNumber}
+                      {item.visitor.phoneNumber || '—'}
                     </td>
                     <td className="px-6 py-4 text-[#1F2937]">{item.hostName || '—'}</td>
                     <td className="px-6 py-4 font-medium text-[#1F2937]">

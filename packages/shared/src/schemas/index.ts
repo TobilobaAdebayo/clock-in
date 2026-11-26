@@ -6,13 +6,24 @@ export const RoleSchema = z.enum(ROLES);
 // Visitor schemas
 export const RegisterVisitorSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
-  phoneNumber: z.string().trim().min(7, 'Invalid phone number').max(20),
+  phoneNumber: z
+    .string()
+    .trim()
+    .optional()
+    .refine((val) => !val || (val.length >= 7 && val.length <= 20), {
+      message: 'Invalid phone number',
+    }),
   hostName: z.string().trim().max(150).optional(),
 });
 
-export const LookupVisitorSchema = z.object({
-  phoneNumber: z.string().trim().min(7, 'Invalid phone number').max(20),
-});
+export const LookupVisitorSchema = z
+  .object({
+    identifier: z.string().trim().min(2, 'Enter your phone number or full name').max(100).optional(),
+    phoneNumber: z.string().trim().min(2, 'Enter your phone number or full name').max(100).optional(),
+  })
+  .refine((data) => Boolean(data.identifier || data.phoneNumber), {
+    message: 'Please enter your phone number or full name',
+  });
 
 export const ConfirmVisitorIdentitySchema = z.object({
   lookupToken: z.string().min(1, 'Lookup token is required'),

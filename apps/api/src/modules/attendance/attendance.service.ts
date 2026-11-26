@@ -177,20 +177,24 @@ export class AttendanceService {
   }
 
   /**
-   * Receptionist manual check-in: finds existing visitor by phone (or registers them if new)
-   * and immediately creates an active attendance session with audit logging.
+   * Receptionist manual check-in: finds existing visitor by phone (or name when phone is omitted),
+   * or registers them if new, and immediately creates an active attendance session with audit logging.
    */
   async manualCheckIn(
-    input: { fullName: string; phoneNumber: string; hostName: string },
+    input: { fullName: string; phoneNumber?: string | null; hostName: string },
     actorId: string,
   ) {
-    const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
     const cleanName = input.fullName.trim();
     const cleanHost = input.hostName.trim();
+    const rawPhone = input.phoneNumber?.trim();
+    const normalizedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : null;
 
     try {
       return await prisma.$transaction(async (tx) => {
-        let visitor = await this.visitorRepo.findByPhoneNumber(normalizedPhone, tx);
+        let visitor = normalizedPhone
+          ? await this.visitorRepo.findByPhoneNumber(normalizedPhone, tx)
+          : (await this.visitorRepo.findByFullName(cleanName, tx)).find((v) => !v.phoneNumber) ||
+            null;
         let createdNewVisitor = false;
 
         if (!visitor) {

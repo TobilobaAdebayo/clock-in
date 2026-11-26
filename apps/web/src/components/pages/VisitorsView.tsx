@@ -11,7 +11,7 @@ import { Badge, Button, Card, Modal, Pagination } from '../ui';
 interface Visitor {
   id: string;
   fullName: string;
-  phoneNumber: string;
+  phoneNumber: string | null;
   createdAt: string;
   hasActiveSession?: boolean;
   activeSession?: {
@@ -32,7 +32,7 @@ interface VisitorProfileDetail {
   visitor: {
     id: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     createdAt: string;
   };
   stats: {
@@ -323,7 +323,7 @@ function VisitorsDirectoryContent() {
                         {visitor.fullName}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs">{visitor.phoneNumber}</td>
+                    <td className="px-6 py-4 font-mono text-xs">{visitor.phoneNumber || '—'}</td>
                     <td className="px-6 py-4">
                       {visitor.hasActiveSession ? (
                         <div className="flex flex-col items-start gap-0.5">
@@ -398,7 +398,7 @@ function VisitorsDirectoryContent() {
               <div>
                 <div className="text-xs text-[#6B7A8C]">Phone Number</div>
                 <div className="font-mono text-sm font-semibold text-[#111827] mt-0.5">
-                  {modalProfile.visitor.phoneNumber}
+                  {modalProfile.visitor.phoneNumber || 'Not provided'}
                 </div>
               </div>
               <div>

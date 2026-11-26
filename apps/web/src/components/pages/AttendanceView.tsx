@@ -17,7 +17,7 @@ interface AttendanceItem {
   visitor: {
     id: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
   };
 }
 
@@ -139,7 +139,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         method: 'POST',
         body: JSON.stringify({
           fullName: manualFullName.trim(),
-          phoneNumber: manualPhone.trim(),
+          ...(manualPhone.trim() ? { phoneNumber: manualPhone.trim() } : {}),
           hostName: manualHostName.trim(),
         }),
       });
@@ -312,7 +312,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
                         {item.visitor.fullName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs">{item.visitor.phoneNumber}</td>
+                    <td className="px-6 py-4 font-mono text-xs">{item.visitor.phoneNumber || '—'}</td>
                     <td className="px-6 py-4 text-[#1F2937]">{item.hostName || '—'}</td>
                     <td className="px-6 py-4 font-medium text-[#1F2937]">
                       {formatDayAndDate(item.checkIn)}
@@ -450,9 +450,8 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
           />
 
           <Input
-            label="Phone Number"
+            label="Phone Number (Optional)"
             type="tel"
-            required
             placeholder="e.g. 0803 123 4567"
             value={manualPhone}
             onChange={(e) => setManualPhone(e.target.value)}

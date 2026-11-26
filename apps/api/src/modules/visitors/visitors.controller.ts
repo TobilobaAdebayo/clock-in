@@ -19,8 +19,8 @@ export class VisitorsController {
 
   lookup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { phoneNumber } = req.body;
-      const result = await this.service.lookup(phoneNumber);
+      const identifier = req.body.identifier || req.body.phoneNumber;
+      const result = await this.service.lookup(identifier);
       res.status(200).json({
         success: true,
         data: result,

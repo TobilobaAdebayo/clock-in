@@ -108,7 +108,7 @@ export class PdfReportBuilder {
           const values = [
             String(index + 1),
             record.visitor.fullName,
-            record.visitor.phoneNumber,
+            record.visitor.phoneNumber || '—',
             record.hostName || '—',
             dateFormatted,
             timeInFormatted,

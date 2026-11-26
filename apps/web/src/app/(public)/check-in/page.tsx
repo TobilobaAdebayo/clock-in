@@ -19,6 +19,7 @@ type Mode =
 interface LookupData {
   lookupToken: string;
   checkOutToken?: string | null;
+  matchedBy?: 'phone' | 'name';
   maskedName: string;
   maskedPhone: string;
   hasActiveSession: boolean;
@@ -117,7 +118,7 @@ function CheckInFlow() {
         method: 'POST',
         body: JSON.stringify({
           fullName,
-          phoneNumber,
+          ...(phoneNumber.trim() ? { phoneNumber: phoneNumber.trim() } : {}),
           hostName: newHostName.trim(),
         }),
       });
@@ -151,7 +152,7 @@ function CheckInFlow() {
     try {
       const res = await apiClient<LookupData>('/api/v1/public/visitors/lookup', {
         method: 'POST',
-        body: JSON.stringify({ phoneNumber: lookupPhone }),
+        body: JSON.stringify({ identifier: lookupPhone.trim() }),
       });
 
       const data = res.data!;
@@ -328,13 +329,12 @@ function CheckInFlow() {
                 />
 
                 <Input
-                  label="Phone Number"
+                  label="Phone Number (Optional)"
                   type="tel"
-                  required
                   placeholder="e.g. 0803 123 4567"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  helperText="Used to recognize you on future visits without registering again."
+                  helperText="Optional. Adding your phone number makes future check-ins faster."
                 />
 
                 <Input
@@ -377,14 +377,14 @@ function CheckInFlow() {
             {mode === 'returning-lookup' && (
               <form onSubmit={handleLookup} className="space-y-4">
                 <Input
-                  label="Enter Your Phone Number"
-                  type="tel"
+                  label="Enter Your Phone Number or Full Name"
+                  type="text"
                   required
                   autoFocus
-                  placeholder="e.g. 0803 123 4567"
+                  placeholder="e.g. 0803 123 4567 or Adebayo Ogunlesi"
                   value={lookupPhone}
                   onChange={(e) => setLookupPhone(e.target.value)}
-                  helperText="Already clocked in today? Enter your phone number to sign out directly."
+                  helperText="Use your phone number, or your full name if you registered without a phone number."
                 />
 
                 <div className="flex items-center justify-end gap-2.5 pt-2">
@@ -422,7 +422,17 @@ function CheckInFlow() {
                     Ready to Sign Out?
                   </h2>
                   <p className="text-base text-[#475569]">
-                    Phone: <span className="font-mono font-semibold">{lookupResult.maskedPhone}</span>
+                    {lookupResult.maskedPhone !== 'Not provided' ? (
+                      <>
+                        Phone:{' '}
+                        <span className="font-mono font-semibold">{lookupResult.maskedPhone}</span>
+                      </>
+                    ) : (
+                      <>
+                        Visitor:{' '}
+                        <span className="font-semibold">{lookupResult.maskedName}</span>
+                      </>
+                    )}
                   </p>
                   <div className="flex flex-wrap justify-center items-center gap-4 text-sm sm:text-base text-[#475569] pt-1">
                     <span className="inline-flex items-center gap-2">

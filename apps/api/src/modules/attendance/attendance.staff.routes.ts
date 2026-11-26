@@ -16,7 +16,13 @@ const correctAttendanceSchema = z.object({
 
 const manualCheckInSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
-  phoneNumber: z.string().trim().min(7, 'Invalid phone number').max(20),
+  phoneNumber: z
+    .string()
+    .trim()
+    .optional()
+    .refine((val) => !val || (val.length >= 7 && val.length <= 20), {
+      message: 'Invalid phone number',
+    }),
   hostName: z.string().trim().min(2, 'Please enter who they are here to see').max(150),
 });
 

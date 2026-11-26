@@ -11,7 +11,7 @@ interface ProfileData {
   visitor: {
     id: string;
     fullName: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     createdAt: string;
   };
   stats: {
@@ -87,7 +87,9 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
               <Badge tone="neutral">Clocked Out</Badge>
             )}
           </div>
-          <div className="text-sm font-mono text-[#475569] mt-1">{profile.visitor.phoneNumber}</div>
+          <div className="text-sm font-mono text-[#475569] mt-1">
+            {profile.visitor.phoneNumber || 'Phone not provided'}
+          </div>
           <div className="text-xs text-[#6B7A8C] mt-1">
             Registered on {formatDayAndDate(profile.visitor.createdAt)}
           </div>

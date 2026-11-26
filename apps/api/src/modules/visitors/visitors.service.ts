@@ -8,28 +8,47 @@ import { ConflictError, NotFoundError, BadRequestError } from '../../shared/erro
 
 export interface RegisterVisitorDto {
   fullName: string;
-  phoneNumber: string;
+  phoneNumber?: string | null;
   hostName?: string;
 }
+
+const looksLikePhoneNumber = (input: string): boolean => {
+  const trimmed = input.trim();
+  if (!/^[+\d\s\-().]+$/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
 
 export class VisitorsService {
   constructor(private repo: VisitorsRepository = visitorsRepository) {}
 
   /**
-   * Registers a new visitor and immediately creates their initial check-in session (FR-01, FR-04).
+   * Registers a new visitor (phone number optional) and immediately creates their initial check-in session (FR-01, FR-04).
    */
   async register(data: RegisterVisitorDto) {
-    const normalizedPhone = normalizePhoneNumber(data.phoneNumber);
+    const cleanName = data.fullName.trim();
+    const rawPhone = data.phoneNumber?.trim();
+    let normalizedPhone: string | null = null;
 
-    const existingVisitor = await this.repo.findByPhoneNumber(normalizedPhone);
-    if (existingVisitor) {
-      throw new ConflictError(
-        'A visitor with this phone number is already registered. Please proceed to returning visitor check-in.',
-      );
+    if (rawPhone) {
+      normalizedPhone = normalizePhoneNumber(rawPhone);
+      const existingVisitor = await this.repo.findByPhoneNumber(normalizedPhone);
+      if (existingVisitor) {
+        throw new ConflictError(
+          'A visitor with this phone number is already registered. Please proceed to returning visitor check-in.',
+        );
+      }
+    } else {
+      const sameNameVisitors = await this.repo.findByFullName(cleanName);
+      if (sameNameVisitors.some((v) => !v.phoneNumber)) {
+        throw new ConflictError(
+          'A visitor with this name is already registered. Please proceed to returning visitor check-in.',
+        );
+      }
     }
 
     const visitor = await this.repo.create({
-      fullName: data.fullName.trim(),
+      fullName: cleanName,
       phoneNumber: normalizedPhone,
     });
 
@@ -51,22 +70,45 @@ export class VisitorsService {
   }
 
   /**
-   * Looks up returning visitor by phone number (FR-03).
+   * Looks up returning visitor by phone number OR full name (for visitors registered without a phone number).
    */
-  async lookup(phoneNumber: string) {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    const visitor = await this.repo.findByPhoneNumber(normalizedPhone);
+  async lookup(identifier: string) {
+    const trimmed = identifier.trim();
+    let visitor = null;
+    let matchedBy: 'phone' | 'name' = 'phone';
+
+    if (looksLikePhoneNumber(trimmed)) {
+      const normalizedPhone = normalizePhoneNumber(trimmed);
+      visitor = await this.repo.findByPhoneNumber(normalizedPhone);
+      matchedBy = 'phone';
+    } else {
+      matchedBy = 'name';
+      const matches = await this.repo.findByFullName(trimmed);
+      if (matches.length > 1) {
+        const phoneLessMatches = matches.filter((v) => !v.phoneNumber);
+        if (phoneLessMatches.length === 1) {
+          visitor = phoneLessMatches[0];
+        } else {
+          throw new BadRequestError(
+            'Multiple visitors are registered under this name. Please enter your phone number or ask the receptionist for assistance.',
+          );
+        }
+      } else if (matches.length === 1) {
+        visitor = matches[0];
+      }
+    }
 
     if (!visitor) {
       throw new NotFoundError(
-        'No registered visitor found with this phone number. Please register as a new visitor.',
+        matchedBy === 'phone'
+          ? 'No registered visitor found with this phone number. Please register as a new visitor.'
+          : 'No registered visitor found with this name. Please check the spelling or register as a new visitor.',
       );
     }
 
     const activeSession = await attendanceService.getActiveSession(visitor.id);
 
     // Privacy: never store plaintext fullName or phoneNumber inside the base64url lookupToken.
-    // Store only an HMAC digest of the normalized full name for constant-time confirmation.
     const nameDigest = hmacDigest(
       visitor.fullName.trim().toLowerCase(),
       env.JWT_ACCESS_SECRET,
@@ -82,7 +124,7 @@ export class VisitorsService {
     );
 
     // If visitor is already signed in, issue a scoped check-out-only token so they can
-    // sign out with phone number alone (name verification is required only for signing in).
+    // sign out directly without an extra confirmation step.
     const checkOutToken = activeSession
       ? signLookupToken(
           {
@@ -98,8 +140,9 @@ export class VisitorsService {
     return {
       lookupToken,
       checkOutToken,
+      matchedBy,
       maskedName: maskName(visitor.fullName),
-      maskedPhone: maskPhoneNumber(visitor.phoneNumber),
+      maskedPhone: visitor.phoneNumber ? maskPhoneNumber(visitor.phoneNumber) : 'Not provided',
       hasActiveSession: Boolean(activeSession),
       activeSession: activeSession
         ? {

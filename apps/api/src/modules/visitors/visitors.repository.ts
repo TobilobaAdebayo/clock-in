@@ -12,6 +12,21 @@ export class VisitorsRepository {
     });
   }
 
+  async findByFullName(
+    fullName: string,
+    tx: Prisma.TransactionClient = prisma,
+  ): Promise<Visitor[]> {
+    return tx.visitor.findMany({
+      where: {
+        fullName: {
+          equals: fullName.trim(),
+          mode: 'insensitive',
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findById(id: string, tx: Prisma.TransactionClient = prisma): Promise<Visitor | null> {
     return tx.visitor.findUnique({
       where: { id },
@@ -21,14 +36,14 @@ export class VisitorsRepository {
   async create(
     data: {
       fullName: string;
-      phoneNumber: string;
+      phoneNumber?: string | null;
     },
     tx: Prisma.TransactionClient = prisma,
   ): Promise<Visitor> {
     return tx.visitor.create({
       data: {
         fullName: data.fullName,
-        phoneNumber: data.phoneNumber,
+        phoneNumber: data.phoneNumber ?? null,
       },
     });
   }

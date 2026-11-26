@@ -25,7 +25,7 @@ export interface DashboardSummary {
     visitor: {
       id: string;
       fullName: string;
-      phoneNumber: string;
+      phoneNumber: string | null;
     };
   }>;
 }
