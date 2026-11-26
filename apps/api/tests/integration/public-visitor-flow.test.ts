@@ -282,5 +282,48 @@ describe('Public Visitor Check-In & Check-Out Flow (M2 Integration)', () => {
       expect(res.body.error.code).toBe('BAD_REQUEST');
       expect(res.body.error.message).toContain('No active visit session found');
     });
+
+    it('does not show a visitor as signed in on a new day if they forgot to clock out yesterday, and auto-closes the previous-day session on new check-in', async () => {
+      const yesterdaySession = {
+        ...mockOpenAttendance,
+        id: 'attendance-yesterday-1',
+        checkIn: new Date(Date.now() - 30 * 3600_000),
+        checkOut: null,
+      };
+      const todayNewSession = {
+        ...mockOpenAttendance,
+        id: 'attendance-today-1',
+        checkIn: new Date(),
+        checkOut: null,
+      };
+
+      vi.spyOn(visitorsRepository, 'findByPhoneNumber').mockResolvedValue(mockVisitor);
+      vi.spyOn(attendanceRepository, 'findActiveByVisitorId').mockResolvedValue(yesterdaySession);
+      const closeSpy = vi
+        .spyOn(attendanceRepository, 'closeSession')
+        .mockResolvedValue({ ...yesterdaySession, checkOut: new Date() });
+      const createSpy = vi
+        .spyOn(attendanceRepository, 'create')
+        .mockResolvedValue(todayNewSession);
+
+      // 1. Lookup on the new day must NOT show them as currently signed in
+      const lookupRes = await request(app)
+        .post('/api/v1/public/visitors/lookup')
+        .send({ phoneNumber: '08123456789' });
+
+      expect(lookupRes.status).toBe(200);
+      expect(lookupRes.body.data.hasActiveSession).toBe(false);
+      expect(lookupRes.body.data.checkOutToken).toBeNull();
+
+      // 2. Clocking in today succeeds and auto-closes yesterday's unclosed session
+      const checkInRes = await request(app)
+        .post('/api/v1/public/attendance/check-in')
+        .send({ visitorId: mockVisitor.id, hostName: 'Programs Team' });
+
+      expect(checkInRes.status).toBe(201);
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+      expect(closeSpy.mock.calls[0][0]).toBe('attendance-yesterday-1');
+      expect(createSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -1,11 +1,10 @@
-const CACHE_NAME = 'daih-clock-in-v1';
+const CACHE_NAME = 'daih-clock-in-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/check-in',
   '/manifest.json',
   '/workspace-hero.svg',
   '/icon-192.png',
   '/icon-512.png',
+  '/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -33,35 +32,40 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith('/api/')) return;
 
-  // Network-first for HTML pages so attendance data stays live, with cache fallback
+  // Never intercept API calls, Next.js runtime/build chunks, or RSC navigation fetches
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/') ||
+    url.searchParams.has('_rsc') ||
+    request.headers.get('RSC') === '1'
+  ) {
+    return;
+  }
+
+  // Network-first for HTML page navigations (offline fallback only)
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          return response;
-        })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
+      fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
     );
     return;
   }
 
-  // Stale-while-revalidate for static assets
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    }),
-  );
+  // Cache-first only for explicit public static assets
+  if (STATIC_ASSETS.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request)
+          .then((response) => {
+            if (response && response.status === 200) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || fetchPromise;
+      }),
+    );
+  }
 });

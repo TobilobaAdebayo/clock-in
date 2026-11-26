@@ -84,10 +84,10 @@ export default function SecurityDeskPage() {
       });
       const visitorName = fullName.trim();
       setShowSignInModal(false);
-      setBanner({ type: 'success', text: `${visitorName} has been signed in.` });
+      setBanner({ type: 'success', text: `${visitorName} has been clocked in.` });
       fetchActive();
     } catch (err: any) {
-      setModalError(err.message || 'Could not sign in visitor.');
+      setModalError(err.message || 'Could not clock in visitor.');
     } finally {
       setSaving(false);
     }
@@ -101,10 +101,10 @@ export default function SecurityDeskPage() {
       await apiClient(`/api/v1/attendance/${session.id}/manual-check-out`, {
         method: 'POST',
       });
-      setBanner({ type: 'success', text: `${session.visitor.fullName} has been signed out.` });
+      setBanner({ type: 'success', text: `${session.visitor.fullName} has been clocked out.` });
       fetchActive();
     } catch (err: any) {
-      setBanner({ type: 'error', text: err.message || 'Failed to sign out visitor.' });
+      setBanner({ type: 'error', text: err.message || 'Failed to clock out visitor.' });
     } finally {
       setSigningOutId(null);
     }
@@ -119,10 +119,10 @@ export default function SecurityDeskPage() {
             FRONT DESK COVERAGE
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111827] mt-0.5">
-            Visitor Check-In
+            Visitor Clock In
           </h1>
           <p className="text-sm text-[#6B7A8C] mt-1">
-            Sign visitors in when they arrive and sign them out when leaving.
+            Clock visitors in when they arrive and clock them out when leaving.
           </p>
         </div>
 
@@ -132,17 +132,16 @@ export default function SecurityDeskPage() {
           className="w-full sm:w-auto min-h-[48px] px-6 text-base"
         >
           <UserPlus className="w-5 h-5" />
-          Sign In Visitor
+          Clock In
         </Button>
       </div>
 
       {banner && (
         <div
-          className={`p-3.5 rounded-xl text-sm font-medium border flex items-center justify-between gap-3 ${
-            banner.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-red-50 text-red-700 border-red-200'
-          }`}
+          className={`p-3.5 rounded-xl text-sm font-medium border flex items-center justify-between gap-3 ${banner.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            : 'bg-red-50 text-red-700 border-red-200'
+            }`}
         >
           <span>{banner.text}</span>
           <button
@@ -198,11 +197,11 @@ export default function SecurityDeskPage() {
         ) : filteredSessions.length === 0 ? (
           <div className="p-10 text-center space-y-2">
             <div className="text-sm font-medium text-[#475569]">
-              {search ? 'No signed-in visitor matches your search.' : 'No visitors are currently signed in.'}
+              {search ? 'No clocked-in visitor matches your search.' : 'No visitors are currently clocked in.'}
             </div>
             {!search && (
               <p className="text-xs text-[#6B7A8C]">
-                Tap <strong>Sign In Visitor</strong> above when a guest arrives.
+                Tap <strong>Clock In</strong> above when a guest arrives.
               </p>
             )}
           </div>
@@ -223,7 +222,7 @@ export default function SecurityDeskPage() {
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6B7A8C]">
                     <span className="inline-flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-[#34526E]" />
-                      Signed in at {formatTime(session.checkIn)}
+                      Clocked in at {formatTime(session.checkIn)}
                     </span>
                     {session.hostName && (
                       <span>
@@ -241,7 +240,7 @@ export default function SecurityDeskPage() {
                   className="w-full sm:w-auto min-h-[44px] border-amber-200 text-amber-800 hover:bg-amber-50"
                 >
                   <LogOut className="w-4 h-4" />
-                  {signingOutId === session.id ? 'Signing out...' : 'Sign Out'}
+                  {signingOutId === session.id ? 'Clocking out...' : 'Clock Out'}
                 </Button>
               </div>
             ))}
@@ -249,10 +248,10 @@ export default function SecurityDeskPage() {
         )}
       </Card>
 
-      {/* Sign In Visitor Popup Modal */}
+      {/* Clock In Visitor Popup Modal */}
       <Modal
         open={showSignInModal}
-        title="Sign In Visitor"
+        title="Clock In Visitor"
         subtitle="Only Full Name is required. Works for both new and returning visitors."
         onClose={() => setShowSignInModal(false)}
       >
@@ -284,7 +283,7 @@ export default function SecurityDeskPage() {
           <Input
             label="Who are you here to see? (Optional)"
             type="text"
-            placeholder="e.g. Mr. Tunde / Operations Desk"
+            placeholder="e.g. Mr. Tunde or Operations Desk"
             value={hostName}
             onChange={(e) => setHostName(e.target.value)}
           />
@@ -300,7 +299,7 @@ export default function SecurityDeskPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={saving} className="min-h-[44px] px-6">
-              {saving ? 'Signing in...' : 'Done'}
+              {saving ? 'Clocking in...' : 'Clock In'}
             </Button>
           </div>
         </form>

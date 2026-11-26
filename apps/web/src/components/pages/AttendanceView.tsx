@@ -460,7 +460,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
           <Input
             label="Who are you here to see? (Optional)"
             type="text"
-            placeholder="e.g. Mr. Tunde / Operations Desk"
+            placeholder="e.g. Mr. Tunde or Operations Desk"
             value={manualHostName}
             onChange={(e) => setManualHostName(e.target.value)}
           />

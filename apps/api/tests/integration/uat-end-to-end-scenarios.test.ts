@@ -79,7 +79,10 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
   });
 
   it('executes full UAT lifecycle: new visitor -> returning lookup/confirm/check-out -> forgotten check-out -> correction -> audit -> export', async () => {
-    const checkInTime = new Date('2026-11-24T08:30:00.000Z');
+    const now = new Date();
+    const todayIsoDate = now.toISOString().slice(0, 10);
+    const checkInTime = new Date(now.getTime() - 2 * 3600_000);
+    const correctedCheckOutIso = new Date(now.getTime() + 4 * 3600_000).toISOString();
     const visitorRecord = {
       id: 'uat-visitor-1',
       fullName: 'Ngozi Eze',
@@ -207,7 +210,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
       .patch(`/api/v1/attendance/${forgottenSessionId}/correct`)
       .set('Authorization', `Bearer ${receptionistToken}`)
       .send({
-        checkOut: '2026-11-24T17:00:00.000Z',
+        checkOut: correctedCheckOutIso,
         reason: 'Visitor forgot to sign out at desk',
       });
     expect(forbiddenCorrectRes.status).toBe(403);
@@ -217,7 +220,7 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
       .patch(`/api/v1/attendance/${forgottenSessionId}/correct`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        checkOut: '2026-11-24T17:00:00.000Z',
+        checkOut: correctedCheckOutIso,
         reason: 'Visitor confirmed departure at 6:00 PM WAT via reception desk',
       });
     expect(adminCorrectRes.status).toBe(200);
@@ -225,16 +228,16 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     expect(auditLogs[0].action).toBe('ATTENDANCE_CORRECTION');
     expect(auditLogs[0].actorId).toBe(superAdmin.id);
     expect(auditLogs[0].oldValues.checkOut).toBeNull();
-    expect(auditLogs[0].newValues.checkOut).toBe('2026-11-24T17:00:00.000Z');
+    expect(auditLogs[0].newValues.checkOut).toBe(correctedCheckOutIso);
 
     // 6. Receptionist exports Daily Excel Report (.xlsx)
     const exportRes = await request(app)
-      .get('/api/v1/reports/export?type=DAILY&date=2026-11-24')
+      .get(`/api/v1/reports/export?type=DAILY&date=${todayIsoDate}`)
       .set('Authorization', `Bearer ${receptionistToken}`);
     expect(exportRes.status).toBe(200);
     expect(exportRes.headers['content-type']).toContain(
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    expect(exportRes.headers['content-disposition']).toContain('attendance_daily_2026-11-24.xlsx');
+    expect(exportRes.headers['content-disposition']).toContain(`attendance_daily_${todayIsoDate}.xlsx`);
   });
 });

@@ -1,6 +1,7 @@
 import { Visitor, Prisma, Attendance } from '@prisma/client';
 import { prisma } from '../../shared/db/prisma.js';
-import { getWeekBounds, getMonthBounds } from '../../shared/utils/time.js';
+import { getDayBounds, getWeekBounds, getMonthBounds } from '../../shared/utils/time.js';
+import { env } from '../../config/env.js';
 
 export class VisitorsRepository {
   async findByPhoneNumber(
@@ -79,16 +80,20 @@ export class VisitorsRepository {
       ];
     }
 
+    const { startOfDay } = getDayBounds(new Date(), env.WORKSPACE_TIMEZONE);
+
     if (status === 'ACTIVE') {
       where.attendances = {
         some: {
           checkOut: null,
+          checkIn: { gte: startOfDay },
         },
       };
     } else if (status === 'CHECKED_OUT') {
       where.attendances = {
         none: {
           checkOut: null,
+          checkIn: { gte: startOfDay },
         },
       };
     }
@@ -103,7 +108,10 @@ export class VisitorsRepository {
         },
         include: {
           attendances: {
-            where: { checkOut: null },
+            where: {
+              checkOut: null,
+              checkIn: { gte: startOfDay },
+            },
             select: {
               id: true,
               checkIn: true,
@@ -131,6 +139,7 @@ export class VisitorsRepository {
     lastVisit: Attendance | null;
     activeSession: Attendance | null;
   }> {
+    const today = getDayBounds(new Date(), timezone);
     const week = getWeekBounds(new Date(), timezone);
     const month = getMonthBounds(new Date(), timezone);
 
@@ -165,6 +174,9 @@ export class VisitorsRepository {
           where: {
             visitorId,
             checkOut: null,
+            checkIn: {
+              gte: today.startOfDay,
+            },
           },
         }),
       ]);

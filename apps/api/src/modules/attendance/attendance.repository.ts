@@ -120,11 +120,14 @@ export class AttendanceRepository {
   }
 
   /**
-   * Returns all currently active visitors in the space (FR-10).
+   * Returns all currently active visitors in the space (scoped to today when `since` is supplied) (FR-10).
    */
-  async findActiveSessions(): Promise<any[]> {
+  async findActiveSessions(since?: Date): Promise<any[]> {
     return prisma.attendance.findMany({
-      where: { checkOut: null },
+      where: {
+        checkOut: null,
+        ...(since ? { checkIn: { gte: since } } : {}),
+      },
       orderBy: { checkIn: 'desc' },
       include: {
         visitor: {

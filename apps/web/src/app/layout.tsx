@@ -10,7 +10,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta
           name="viewport"
@@ -24,7 +24,10 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <title>Dare Adeboye Innovation Hub · Clock In</title>
       </head>
-      <body className="min-h-screen antialiased bg-[#F7F9FB] text-[#111827] selection:bg-[#DCE6EE] selection:text-[#1E3A54]">
+      <body
+        suppressHydrationWarning
+        className="min-h-screen antialiased bg-[#F7F9FB] text-[#111827] selection:bg-[#DCE6EE] selection:text-[#1E3A54]"
+      >
         <PwaRegistrar />
         <AuthProvider>{children}</AuthProvider>
       </body>

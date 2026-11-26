@@ -5,6 +5,8 @@ import { visitorsRepository, VisitorsRepository } from '../visitors/visitors.rep
 import { auditService, AuditService } from '../audit/audit.service.js';
 import { parsePagination, createPaginatedResponse } from '../../shared/utils/pagination.js';
 import { normalizePhoneNumber } from '../../shared/utils/phone.js';
+import { getDayBounds } from '../../shared/utils/time.js';
+import { env } from '../../config/env.js';
 import { ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/app-error.js';
 
 export class AttendanceService {
@@ -15,18 +17,37 @@ export class AttendanceService {
   ) {}
 
   /**
+   * Returns true when a session's check-in occurred before today's start-of-day in the workspace timezone.
+   * Once a new day breaks, forgotten previous-day sessions no longer count as currently signed in.
+   */
+  private isFromPreviousDay(checkIn: Date, timezone = env.WORKSPACE_TIMEZONE): boolean {
+    const { startOfDay } = getDayBounds(new Date(), timezone);
+    return checkIn < startOfDay;
+  }
+
+  /**
    * Checks in a visitor with server-generated timestamp.
-   * Enforces the active session rule (FR-04, FR-06) within a transaction.
+   * Enforces the active session rule (FR-04, FR-06) for the current day within a transaction.
+   * If a visitor forgot to clock out on a previous day, that stale session is auto-closed at end of its day
+   * so the visitor can cleanly clock in for the new day.
    */
   async checkIn(visitorId: string, hostName?: string): Promise<Attendance> {
     try {
       return await prisma.$transaction(async (tx) => {
         const existingActive = await this.repo.findActiveByVisitorId(visitorId, tx);
         if (existingActive) {
-          throw new ConflictError(
-            'Visitor is already checked in with an active visit session.',
-            { activeSessionId: existingActive.id, checkIn: existingActive.checkIn },
-          );
+          if (this.isFromPreviousDay(existingActive.checkIn)) {
+            const previousDayEnd = getDayBounds(
+              existingActive.checkIn,
+              env.WORKSPACE_TIMEZONE,
+            ).endOfDay;
+            await this.repo.closeSession(existingActive.id, previousDayEnd, tx);
+          } else {
+            throw new ConflictError(
+              'Visitor is already checked in with an active visit session.',
+              { activeSessionId: existingActive.id, checkIn: existingActive.checkIn },
+            );
+          }
         }
 
         return await this.repo.create(visitorId, tx, hostName);
@@ -40,12 +61,12 @@ export class AttendanceService {
   }
 
   /**
-   * Checks out a visitor from their open session with server-generated timestamp (FR-05).
+   * Checks out a visitor from their open session for today with server-generated timestamp (FR-05).
    */
   async checkOut(visitorId: string): Promise<Attendance> {
     return prisma.$transaction(async (tx) => {
       const activeSession = await this.repo.findActiveByVisitorId(visitorId, tx);
-      if (!activeSession) {
+      if (!activeSession || this.isFromPreviousDay(activeSession.checkIn)) {
         throw new BadRequestError('No active visit session found. You are not currently checked in.');
       }
 
@@ -54,18 +75,23 @@ export class AttendanceService {
   }
 
   /**
-   * Checks whether a visitor currently has an open attendance session.
+   * Checks whether a visitor currently has an open attendance session for today.
    */
   async hasActiveSession(visitorId: string): Promise<boolean> {
-    const session = await this.repo.findActiveByVisitorId(visitorId);
+    const session = await this.getActiveSession(visitorId);
     return session !== null;
   }
 
   /**
-   * Gets current active session for visitor, if any.
+   * Gets current active session for visitor for today, if any.
+   * Previous-day unclosed sessions return null once a new day begins.
    */
   async getActiveSession(visitorId: string): Promise<Attendance | null> {
-    return this.repo.findActiveByVisitorId(visitorId);
+    const session = await this.repo.findActiveByVisitorId(visitorId);
+    if (!session || this.isFromPreviousDay(session.checkIn)) {
+      return null;
+    }
+    return session;
   }
 
   /**
@@ -170,10 +196,11 @@ export class AttendanceService {
   }
 
   /**
-   * Lists all currently checked-in visitors in the workspace (FR-10).
+   * Lists all currently checked-in visitors in the workspace for today (FR-10).
    */
   async getActiveSessions() {
-    return this.repo.findActiveSessions();
+    const { startOfDay } = getDayBounds(new Date(), env.WORKSPACE_TIMEZONE);
+    return this.repo.findActiveSessions(startOfDay);
   }
 
   /**
@@ -211,10 +238,18 @@ export class AttendanceService {
 
         const existingActive = await this.repo.findActiveByVisitorId(visitor.id, tx);
         if (existingActive) {
-          throw new ConflictError(
-            `${visitor.fullName} is already checked in with an active session.`,
-            { activeSessionId: existingActive.id, checkIn: existingActive.checkIn },
-          );
+          if (this.isFromPreviousDay(existingActive.checkIn)) {
+            const previousDayEnd = getDayBounds(
+              existingActive.checkIn,
+              env.WORKSPACE_TIMEZONE,
+            ).endOfDay;
+            await this.repo.closeSession(existingActive.id, previousDayEnd, tx);
+          } else {
+            throw new ConflictError(
+              `${visitor.fullName} is already checked in with an active session.`,
+              { activeSessionId: existingActive.id, checkIn: existingActive.checkIn },
+            );
+          }
         }
 
         const attendance = await this.repo.create(visitor.id, tx, cleanHost);

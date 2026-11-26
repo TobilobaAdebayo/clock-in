@@ -48,10 +48,13 @@ export class DashboardService {
           },
         }),
 
-        // Currently open sessions
+        // Currently open sessions for today (previous-day forgotten sign-outs do not carry over)
         prisma.attendance.count({
           where: {
             checkOut: null,
+            checkIn: {
+              gte: today.startOfDay,
+            },
           },
         }),
 

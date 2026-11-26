@@ -13,7 +13,6 @@ type Mode =
   | 'returning-lookup'
   | 'returning-select'
   | 'returning-confirm'
-  | 'returning-action'
   | 'returning-checkout'
   | 'success';
 
@@ -65,9 +64,8 @@ function CheckInFlow() {
   const [lookupResult, setLookupResult] = useState<LookupData | null>(null);
   const [confirmationName, setConfirmationName] = useState('');
   const [returningHostName, setReturningHostName] = useState('');
-  const [confirmedAction, setConfirmedAction] = useState<ActionData | null>(null);
 
-  // Done / Full-Screen Welcome State
+  // Full-Screen Welcome / Clock-Out Confirmation State
   const [successInfo, setSuccessInfo] = useState<{
     title: string;
     reminder: string;
@@ -77,6 +75,10 @@ function CheckInFlow() {
   } | null>(null);
 
   const [countdown, setCountdown] = useState(12);
+
+  useEffect(() => {
+    router.prefetch('/');
+  }, [router]);
 
   useEffect(() => {
     if (initialModeParam === 'returning') {
@@ -91,11 +93,13 @@ function CheckInFlow() {
       setCountdown(12);
       return;
     }
+    const initialSeconds = successInfo?.status === 'CHECKED_OUT' ? 4 : 12;
+    setCountdown(initialSeconds);
     const timer = setInterval(() => {
       setCountdown((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => clearInterval(timer);
-  }, [mode]);
+  }, [mode, successInfo?.status]);
 
   const resetFlow = () => {
     setMode(initialModeParam === 'returning' ? 'returning-lookup' : 'new');
@@ -107,7 +111,6 @@ function CheckInFlow() {
     setLookupResult(null);
     setConfirmationName('');
     setReturningHostName('');
-    setConfirmedAction(null);
     setSuccessInfo(null);
     setErrorMessage(null);
     setCountdown(12);
@@ -115,11 +118,15 @@ function CheckInFlow() {
 
   const handleSuccessDone = () => {
     const completedStatus = successInfo?.status;
-    resetFlow();
 
     if (completedStatus === 'CHECKED_OUT') {
       router.replace('/');
-    } else if (completedStatus === 'CHECKED_IN') {
+      return;
+    }
+
+    resetFlow();
+
+    if (completedStatus === 'CHECKED_IN') {
       setMode('returning-lookup');
       if (initialModeParam !== 'returning') {
         router.replace('/check-in?mode=returning');
@@ -137,6 +144,8 @@ function CheckInFlow() {
   const selectLookupProfile = (data: LookupData) => {
     setErrorMessage(null);
     setLookupResult(data);
+    setConfirmationName('');
+    setReturningHostName('');
 
     if (data.hasActiveSession && data.checkOutToken) {
       setMode('returning-checkout');
@@ -145,7 +154,7 @@ function CheckInFlow() {
     }
   };
 
-  // 1. Register new visitor & clock in (with who they are here to see)
+  // 1. Register new visitor & clock in immediately
   const handleRegister = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -180,9 +189,6 @@ function CheckInFlow() {
   };
 
   // 2. Returning visitor phone or full-name lookup
-  //    - Multiple matches under the same name -> let visitor pick their masked profile
-  //    - Already signed in -> skip name verification, go directly to quick sign-out
-  //    - Not signed in -> verify name & who they are here to see before signing in
   const handleLookup = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -210,33 +216,8 @@ function CheckInFlow() {
     }
   };
 
-  // 3. Returning visitor name confirmation (only when signing in)
-  const handleConfirmIdentity = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setLoading(true);
-
-    try {
-      const res = await apiClient<ActionData>('/api/v1/public/visitors/confirm', {
-        method: 'POST',
-        body: JSON.stringify({
-          lookupToken: lookupResult!.lookupToken,
-          confirmationAnswer: confirmationName,
-        }),
-      });
-
-      setReturningHostName('');
-      setConfirmedAction(res.data!);
-      setMode('returning-action');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Confirmation failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 4. Returning visitor Clock In (requires who they are here to see for the new day)
-  const handleClockIn = async (e: React.SyntheticEvent<HTMLFormElement>) => {
+  // 3. Single post-verification step: confirm full name + who they are here to see -> Clock In directly
+  const handleConfirmAndClockIn = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     const cleanHost = returningHostName.trim();
     if (!cleanHost) {
@@ -248,48 +229,55 @@ function CheckInFlow() {
     setLoading(true);
 
     try {
-      const res = await apiClient<any>('/api/v1/public/attendance/check-in', {
+      const confirmRes = await apiClient<ActionData>('/api/v1/public/visitors/confirm', {
         method: 'POST',
         body: JSON.stringify({
-          actionToken: confirmedAction!.actionToken,
+          lookupToken: lookupResult!.lookupToken,
+          confirmationAnswer: confirmationName,
+        }),
+      });
+
+      const checkInRes = await apiClient<any>('/api/v1/public/attendance/check-in', {
+        method: 'POST',
+        body: JSON.stringify({
+          actionToken: confirmRes.data!.actionToken,
           hostName: cleanHost,
         }),
       });
 
-      const now = new Date(res.data?.checkIn || Date.now());
+      const now = new Date(checkInRes.data?.checkIn || Date.now());
 
       setSuccessInfo({
         title: `Done! Welcome once again to ${HUB_NAME}`,
         reminder:
-          'Please make sure you always clock in whenever you arrive, and remember that you must sign out / clock out before leaving.',
+          'Please make sure you always clock in whenever you arrive, and remember that you must clock out before leaving.',
         dayLabel: formatDayAndDate(now, { longMonth: true }),
         timestamp: formatTime(now),
         status: 'CHECKED_IN',
       });
       setMode('success');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to clock in.');
+      setErrorMessage(err.message || 'Could not complete clock in.');
     } finally {
       setLoading(false);
     }
   };
 
-  // 5. Returning visitor Clock Out (phone-only via checkOutToken, no name step needed)
+  // 4. Returning visitor Clock Out (direct via checkOutToken, no extra step)
   const handleDirectClockOut = async () => {
     setErrorMessage(null);
     setLoading(true);
 
     try {
-      const token = lookupResult?.checkOutToken || confirmedAction?.actionToken;
       const res = await apiClient<any>('/api/v1/public/attendance/check-out', {
         method: 'POST',
-        body: JSON.stringify({ actionToken: token }),
+        body: JSON.stringify({ actionToken: lookupResult?.checkOutToken }),
       });
 
       const now = new Date(res.data?.checkOut || Date.now());
 
       setSuccessInfo({
-        title: `Done! You have signed out of ${HUB_NAME}`,
+        title: `Done! You have clocked out of ${HUB_NAME}`,
         reminder: 'Thank you for visiting today. Please make sure you clock in on your next visit.',
         dayLabel: formatDayAndDate(now, { longMonth: true }),
         timestamp: formatTime(now),
@@ -305,7 +293,7 @@ function CheckInFlow() {
 
   return (
     <div className="min-h-screen bg-[#F7F9FB] flex flex-col">
-      {/* Compact Top Bar (no left sidebar, lifted layout, mobile-first) */}
+      {/* Compact Top Bar */}
       <header className="bg-white border-b border-[#E6ECF2] sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
           <Link href="/" className="flex items-center gap-2.5 min-w-0 group">
@@ -336,23 +324,28 @@ function CheckInFlow() {
         </div>
       </header>
 
-      {/* Main Content — Positioned cleanly near top of viewport */}
+      {/* Main Content — Spacious, well-utilized layout near top of viewport */}
       <main className="flex-1 w-full px-4 sm:px-6 pt-5 sm:pt-8 pb-12">
         <div
-          className={`w-full mx-auto ${mode === 'returning-action' || mode === 'returning-checkout'
-            ? 'max-w-4xl'
-            : 'max-w-xl'
-            }`}
+          className={`w-full mx-auto ${
+            mode === 'returning-checkout' ? 'max-w-3xl' : 'max-w-2xl'
+          }`}
         >
           {/* Clean Page Header */}
           {mode !== 'success' && (
-            <div className="mb-4 sm:mb-5">
-              <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[#6B7A8C] mb-1">
-                {HUB_NAME.toUpperCase()} &middot; OUR VISITORS
+            <div className="mb-4 sm:mb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold tracking-[0.08em] uppercase text-[#6B7A8C] mb-1">
+                  {HUB_NAME.toUpperCase()} &middot; OUR VISITORS
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111827]">
+                  Clock In
+                </h1>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#111827]">
-                Clock In
-              </h1>
+              <div className="inline-flex items-center gap-2 text-xs font-medium text-[#475569] sm:hidden">
+                <Calendar className="w-3.5 h-3.5 text-[#34526E]" />
+                {formatDayAndDate(new Date())}
+              </div>
             </div>
           )}
 
@@ -367,29 +360,31 @@ function CheckInFlow() {
             {/* 1. NEW VISITOR FORM */}
             {mode === 'new' && (
               <form onSubmit={handleRegister} className="space-y-4">
-                <Input
-                  label="Full Name"
-                  type="text"
-                  required
-                  placeholder="e.g. Adebayo Ogunlesi"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Full Name"
+                    type="text"
+                    required
+                    placeholder="e.g. Adebayo Ogunlesi"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
 
-                <Input
-                  label="Phone Number (Optional)"
-                  type="tel"
-                  placeholder="e.g. 0803 123 4567"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  helperText="Optional. Adding your phone number makes future check-ins faster."
-                />
+                  <Input
+                    label="Phone Number (Optional)"
+                    type="tel"
+                    placeholder="e.g. 0803 123 4567"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    helperText="Optional. Makes future visits faster."
+                  />
+                </div>
 
                 <Input
                   label="Who are you here to see?"
                   type="text"
                   required
-                  placeholder="e.g. Mr. Tunde / Programs Team / Co-working"
+                  placeholder="e.g. Mr. Tunde, Programs Team, or Co-working"
                   value={newHostName}
                   onChange={(e) => setNewHostName(e.target.value)}
                 />
@@ -398,12 +393,11 @@ function CheckInFlow() {
                   <Button type="button" variant="secondary" onClick={resetFlow} className="min-h-[44px]">
                     Clear
                   </Button>
-                  <Button type="submit" isLoading={loading} className="px-6 min-h-[44px]">
+                  <Button type="submit" isLoading={loading} className="px-7 min-h-[44px]">
                     {loading ? 'Clocking in...' : 'Clock In'}
                   </Button>
                 </div>
 
-                {/* Highly Visible Returning Visitor Callout */}
                 <div className="pt-4 border-t border-[#E6ECF2]">
                   <button
                     type="button"
@@ -421,7 +415,7 @@ function CheckInFlow() {
               </form>
             )}
 
-            {/* 2. RETURNING VISITOR: PHONE LOOKUP */}
+            {/* 2. RETURNING VISITOR: PHONE OR FULL NAME LOOKUP */}
             {mode === 'returning-lookup' && (
               <form onSubmit={handleLookup} className="space-y-4">
                 <Input
@@ -439,7 +433,7 @@ function CheckInFlow() {
                   <Button type="button" variant="secondary" onClick={resetFlow} className="min-h-[44px]">
                     Cancel
                   </Button>
-                  <Button type="submit" isLoading={loading} className="px-6 min-h-[44px]">
+                  <Button type="submit" isLoading={loading} className="px-7 min-h-[44px]">
                     {loading ? 'Searching...' : 'Continue'}
                   </Button>
                 </div>
@@ -502,7 +496,7 @@ function CheckInFlow() {
                               : 'bg-white text-[#475569] border-[#DCE3EB]'
                           }`}
                         >
-                          {candidate.hasActiveSession ? 'Signed In' : 'Clocked Out'}
+                          {candidate.hasActiveSession ? 'Clocked In' : 'Clocked Out'}
                         </span>
                         <ChevronRight className="w-4 h-4 text-[#6B7A8C]" />
                       </div>
@@ -526,15 +520,15 @@ function CheckInFlow() {
               </div>
             )}
 
-            {/* 3A. ALREADY SIGNED IN TODAY -> DIRECT PHONE-ONLY SIGN OUT (NO NAME CHECK) */}
+            {/* 3A. ALREADY CLOCKED IN TODAY -> ONE-STEP CLOCK OUT */}
             {mode === 'returning-checkout' && lookupResult && (
-              <div className="space-y-7 text-center py-4 sm:py-8">
-                <div className="p-6 sm:p-10 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] space-y-4">
+              <div className="space-y-6 text-center py-2 sm:py-5">
+                <div className="p-6 sm:p-8 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] space-y-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.08em] text-[#34526E]">
-                    CURRENTLY SIGNED IN
+                    CURRENTLY CLOCKED IN TODAY
                   </div>
-                  <h2 className="text-3xl sm:text-5xl font-extrabold text-[#111827] leading-[1.1] tracking-tight">
-                    Ready to Sign Out?
+                  <h2 className="text-3xl sm:text-4xl font-extrabold text-[#111827] leading-[1.1] tracking-tight">
+                    Ready to Clock Out?
                   </h2>
                   <p className="text-base text-[#475569]">
                     {lookupResult.maskedPhone !== 'Not provided' ? (
@@ -551,11 +545,11 @@ function CheckInFlow() {
                   </p>
                   <div className="flex flex-wrap justify-center items-center gap-4 text-sm sm:text-base text-[#475569] pt-1">
                     <span className="inline-flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-[#34526E]" />
+                      <Calendar className="w-4 h-4 text-[#34526E]" />
                       {formatDayAndDate(new Date(), { longMonth: true })}
                     </span>
                     <span className="inline-flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-[#34526E]" />
+                      <Clock className="w-4 h-4 text-[#34526E]" />
                       {formatTime(new Date())}
                     </span>
                   </div>
@@ -568,7 +562,7 @@ function CheckInFlow() {
                     isLoading={loading}
                     className="w-full sm:w-auto px-10 py-3.5 min-h-[52px] text-base sm:text-lg bg-amber-600 hover:bg-amber-700"
                   >
-                    {loading ? 'Signing Out...' : 'Clock Out / Sign Out'}
+                    {loading ? 'Clocking Out...' : 'Clock Out'}
                   </Button>
                   <Button
                     type="button"
@@ -582,31 +576,59 @@ function CheckInFlow() {
               </div>
             )}
 
-            {/* 3B. RETURNING VISITOR NOT YET SIGNED IN -> CONFIRM FULL NAME */}
+            {/* 3B. ONE COMBINED PAGE AFTER VERIFYING PHONE OR FULL NAME -> CONFIRM NAME + WHO TO SEE + CLOCK IN */}
             {mode === 'returning-confirm' && lookupResult && (
-              <form onSubmit={handleConfirmIdentity} className="space-y-4">
-                <div className="p-4 rounded-xl bg-[#EEF3F7] border border-[#DCE6EE] flex items-center justify-between gap-3">
+              <form onSubmit={handleConfirmAndClockIn} className="space-y-5">
+                <div className="p-4 sm:p-5 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-semibold text-[#34526E]">Profile Found</div>
-                    <div className="text-lg font-bold text-[#111827] mt-0.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#34526E]">
+                      Welcome to {HUB_NAME}
+                    </div>
+                    <div className="text-xl font-bold text-[#111827] mt-0.5">
                       {lookupResult.maskedName}
                     </div>
-                    <div className="text-xs text-[#6B7A8C]">{lookupResult.maskedPhone}</div>
+                    <div className="text-xs text-[#6B7A8C] mt-0.5">
+                      {lookupResult.maskedPhone !== 'Not provided'
+                        ? lookupResult.maskedPhone
+                        : 'No phone number on file'}
+                    </div>
                   </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-[#475569] border border-[#DCE3EB]">
-                    Clocked Out
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-end">
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-white text-[#475569] border border-[#DCE3EB]">
+                      Clocked Out
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-[#475569]">
+                      <Clock className="w-3.5 h-3.5 text-[#34526E]" />
+                      {formatTime(new Date())}
+                    </span>
+                  </div>
                 </div>
 
-                <Input
-                  label="Confirm Your Full Name to Clock In"
-                  type="text"
-                  required
-                  autoFocus
-                  placeholder="Type your registered full name"
-                  value={confirmationName}
-                  onChange={(e) => setConfirmationName(e.target.value)}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Confirm Your Full Name"
+                    type="text"
+                    required
+                    autoFocus
+                    placeholder="Type your registered full name"
+                    value={confirmationName}
+                    onChange={(e) => setConfirmationName(e.target.value)}
+                  />
+
+                  <Input
+                    label="Who are you here to see?"
+                    type="text"
+                    required
+                    placeholder="e.g. Mr. Tunde, Programs Team, or Co-working"
+                    value={returningHostName}
+                    onChange={(e) => setReturningHostName(e.target.value)}
+                  />
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-xs sm:text-sm text-amber-900 flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                  <span>Remember that you must clock out before leaving.</span>
+                </div>
 
                 <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[#E6ECF2]">
                   <Button
@@ -619,73 +641,14 @@ function CheckInFlow() {
                   >
                     Back
                   </Button>
-                  <Button type="submit" isLoading={loading} className="px-6 min-h-[44px]">
-                    {loading ? 'Confirming...' : 'Continue'}
+                  <Button type="submit" isLoading={loading} className="px-8 min-h-[44px]">
+                    {loading ? 'Clocking in...' : 'Clock In'}
                   </Button>
                 </div>
               </form>
             )}
 
-            {/* 4. RETURNING VISITOR CONFIRMED -> ENTER WHO THEY ARE HERE TO SEE & CLOCK IN FOR TODAY */}
-            {mode === 'returning-action' && confirmedAction && (
-              <form onSubmit={handleClockIn} className="space-y-6 py-4 sm:py-6">
-                <div className="p-6 sm:p-8 rounded-2xl bg-[#EEF3F7] border border-[#DCE6EE] space-y-4 text-center">
-                  <h2 className="text-3xl sm:text-5xl font-extrabold text-[#111827] leading-[1.1] tracking-tight">
-                    Welcome to {HUB_NAME}
-                  </h2>
-                  <div className="flex flex-wrap justify-center items-center gap-4 text-sm sm:text-base text-[#475569] pt-1">
-                    <span className="inline-flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-[#34526E]" />
-                      {formatDayAndDate(new Date(), { longMonth: true })}
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-[#34526E]" />
-                      {formatTime(new Date())}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="max-w-lg mx-auto text-left">
-                  <Input
-                    label="Who are you here to see?"
-                    type="text"
-                    required
-                    autoFocus
-                    placeholder="e.g. Mr. Tunde / Programs Team / Co-working"
-                    value={returningHostName}
-                    onChange={(e) => setReturningHostName(e.target.value)}
-                    helperText="Please enter who you are coming to see today before clocking in."
-                  />
-                </div>
-
-                <div className="p-4 sm:p-5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-sm sm:text-base text-amber-900 flex items-center justify-center gap-3 text-center">
-                  <AlertCircle className="w-5 h-5 text-amber-700 flex-shrink-0" />
-                  <span>
-                    Click below to clock in for today. Remember that you must sign out / clock out when leaving.
-                  </span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
-                  <Button
-                    type="submit"
-                    isLoading={loading}
-                    className="w-full sm:w-auto px-10 py-3.5 min-h-[52px] text-base sm:text-lg"
-                  >
-                    {loading ? 'Clocking In...' : 'Clock In for Today'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={resetFlow}
-                    className="w-full sm:w-auto px-6 py-3.5 min-h-[52px] text-base"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            )}
-
-            {/* 5. DONE / FULL-SCREEN WELCOME CONFIRMATION (NO NAME) */}
+            {/* 4. FULL-SCREEN WELCOME / CLOCK-OUT CONFIRMATION */}
             {mode === 'success' && successInfo && (
               <div className="fixed inset-0 z-50 bg-[#F7F9FB] flex flex-col justify-center items-center p-5 sm:p-10 overflow-y-auto">
                 <div className="w-full max-w-5xl bg-white rounded-3xl border border-[#E6ECF2] p-7 sm:p-14 lg:p-20 text-center space-y-7 shadow-sm">
