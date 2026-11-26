@@ -56,15 +56,15 @@ export default function SecurityPortalLayout({ children }: { children: React.Rea
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F7F9FB]">
+    <div className="min-h-[100dvh] flex flex-col bg-[#F7F9FB] overflow-x-hidden">
       <header className="bg-white border-b border-[#E6ECF2] sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-[#34526E] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 min-h-[60px] py-2 flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#34526E] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
               D
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-[#111827] text-xs sm:text-sm truncate">{HUB_NAME}</div>
+              <div className="font-bold text-[#111827] text-xs sm:text-sm leading-tight">{HUB_NAME}</div>
               <div className="text-[11px] text-[#6B7A8C] flex items-center gap-2">
                 <span>Security Desk</span>
                 <span className="hidden sm:inline">&middot;</span>

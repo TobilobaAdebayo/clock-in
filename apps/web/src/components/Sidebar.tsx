@@ -136,18 +136,18 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile Top Bar */}
-      <div className="md:hidden bg-white border-b border-[#E6ECF2] px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+      <div className="md:hidden bg-white border-b border-[#E6ECF2] px-4 py-2.5 flex items-center justify-between gap-2 sticky top-0 z-30">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-[#34526E] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
             D
           </div>
-          <span className="font-bold text-[#111827] text-xs truncate">{HUB_NAME}</span>
+          <span className="font-bold text-[#111827] text-xs leading-tight">{HUB_NAME}</span>
         </div>
         <button
           type="button"
           onClick={() => setMobileOpen((prev) => !prev)}
           aria-label="Toggle navigation menu"
-          className="p-2 rounded-lg text-[#475569] hover:bg-[#EEF3F7]"
+          className="p-2 rounded-lg text-[#475569] hover:bg-[#EEF3F7] flex-shrink-0"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>

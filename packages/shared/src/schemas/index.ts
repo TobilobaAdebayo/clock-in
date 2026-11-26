@@ -14,13 +14,23 @@ export const RegisterVisitorSchema = z.object({
   hostName: z.string().trim().max(150).optional(),
 });
 
+const isPhoneLike = (val: string) => {
+  const trimmed = val.trim();
+  if (!/^[+\d\s\-().]+$/.test(trimmed)) return false;
+  const digits = trimmed.replace(/\D/g, '');
+  return digits.length >= 7 && digits.length <= 15;
+};
+
 export const LookupVisitorSchema = z
   .object({
-    identifier: z.string().trim().min(2, 'Enter your phone number or full name').max(100).optional(),
-    phoneNumber: z.string().trim().min(2, 'Enter your phone number or full name').max(100).optional(),
+    phoneNumber: z.string().trim().optional(),
+    identifier: z.string().trim().optional(),
   })
-  .refine((data) => Boolean(data.identifier || data.phoneNumber), {
-    message: 'Please enter your phone number or full name',
+  .refine((data) => {
+    const raw = data.phoneNumber || data.identifier || '';
+    return raw.length >= 7 && raw.length <= 20 && isPhoneLike(raw);
+  }, {
+    message: 'Please enter a valid registered phone number',
   });
 
 export const ConfirmVisitorIdentitySchema = z.object({

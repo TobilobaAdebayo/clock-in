@@ -205,46 +205,14 @@ describe('Public Visitor Check-In & Check-Out Flow (M2 Integration)', () => {
       expect(confirmRes.body.error.message).toContain('does not match');
     });
 
-    it('returns 200 with masked selectable profiles when multiple visitors share the same full name', async () => {
-      const duplicateVisitor = {
-        ...mockVisitor,
-        id: 'visitor-uuid-2',
-        phoneNumber: null,
-      };
-      vi.spyOn(visitorsRepository, 'findByFullName').mockResolvedValue([
-        mockVisitor,
-        duplicateVisitor,
-      ]);
-      vi.spyOn(attendanceRepository, 'findActiveByVisitorId')
-        .mockResolvedValueOnce(mockOpenAttendance)
-        .mockResolvedValueOnce(null);
-
+    it('rejects non-phone name input on public returning visitor lookup (phone number required)', async () => {
       const lookupRes = await request(app)
         .post('/api/v1/public/visitors/lookup')
         .send({ identifier: 'Tobi Lawson' });
 
-      expect(lookupRes.status).toBe(200);
-      expect(lookupRes.body.success).toBe(true);
-      expect(lookupRes.body.data.multipleMatches).toBe(true);
-      expect(lookupRes.body.data.matches).toHaveLength(2);
-      expect(lookupRes.body.data.matches[0]).not.toHaveProperty('fullName');
-      expect(lookupRes.body.data.matches[0].maskedPhone).toContain('****');
-      expect(lookupRes.body.data.matches[0].hasActiveSession).toBe(true);
-      expect(lookupRes.body.data.matches[1].maskedPhone).toBe('Not provided');
-      expect(lookupRes.body.data.matches[1].hasActiveSession).toBe(false);
-
-      // Selected candidate's lookupToken can confirm identity cleanly
-      vi.spyOn(attendanceRepository, 'findActiveByVisitorId').mockResolvedValueOnce(null);
-      const confirmRes = await request(app)
-        .post('/api/v1/public/visitors/confirm')
-        .send({
-          lookupToken: lookupRes.body.data.matches[1].lookupToken,
-          confirmationAnswer: 'Tobi Lawson',
-        });
-
-      expect(confirmRes.status).toBe(200);
-      expect(confirmRes.body.data.visitorId).toBe('visitor-uuid-2');
-      expect(confirmRes.body.data).toHaveProperty('actionToken');
+      expect(lookupRes.status).toBe(400);
+      expect(lookupRes.body.success).toBe(false);
+      expect(lookupRes.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 

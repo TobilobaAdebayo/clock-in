@@ -114,49 +114,26 @@ export class VisitorsService {
   }
 
   /**
-   * Looks up returning visitor by phone number OR full name (for visitors registered with or without a phone number).
-   * When multiple profiles share the same name, returns masked candidates so the visitor can select theirs safely.
+   * Looks up returning visitor strictly by their registered phone number on the public portal.
    */
   async lookup(identifier: string) {
     const trimmed = identifier.trim();
 
-    if (looksLikePhoneNumber(trimmed)) {
-      const normalizedPhone = normalizePhoneNumber(trimmed);
-      const visitor = await this.repo.findByPhoneNumber(normalizedPhone);
-      if (!visitor) {
-        throw new NotFoundError(
-          'No registered visitor found with this phone number. Please register as a new visitor.',
-        );
-      }
-
-      return {
-        multipleMatches: false as const,
-        ...(await this.buildLookupCandidate(visitor, 'phone')),
-      };
+    if (!looksLikePhoneNumber(trimmed)) {
+      throw new BadRequestError('Please enter a valid registered phone number.');
     }
 
-    const matches = await this.repo.findByFullName(trimmed);
-    if (matches.length === 0) {
+    const normalizedPhone = normalizePhoneNumber(trimmed);
+    const visitor = await this.repo.findByPhoneNumber(normalizedPhone);
+    if (!visitor) {
       throw new NotFoundError(
-        'No registered visitor found with this name. Please check the spelling or register as a new visitor.',
+        'No registered visitor found with this phone number. Please register as a new visitor.',
       );
     }
 
-    if (matches.length === 1) {
-      return {
-        multipleMatches: false as const,
-        ...(await this.buildLookupCandidate(matches[0], 'name')),
-      };
-    }
-
-    const candidates = await Promise.all(
-      matches.slice(0, 10).map((v) => this.buildLookupCandidate(v, 'name')),
-    );
-
     return {
-      multipleMatches: true as const,
-      matchedBy: 'name' as const,
-      matches: candidates,
+      multipleMatches: false as const,
+      ...(await this.buildLookupCandidate(visitor, 'phone')),
     };
   }
 
@@ -170,7 +147,7 @@ export class VisitorsService {
     }>(lookupToken, env.JWT_ACCESS_SECRET);
 
     if (!payload || !payload.visitorId || !payload.nameDigest) {
-      throw new BadRequestError('Invalid or expired lookup session. Please search your phone number or full name again.');
+      throw new BadRequestError('Invalid or expired lookup session. Please search your phone number again.');
     }
 
     const answerDigest = hmacDigest(
