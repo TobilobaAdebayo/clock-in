@@ -9,6 +9,7 @@ import { ConflictError, NotFoundError, BadRequestError } from '../../shared/erro
 export interface RegisterVisitorDto {
   fullName: string;
   phoneNumber: string;
+  hostName?: string;
 }
 
 export class VisitorsService {
@@ -32,7 +33,7 @@ export class VisitorsService {
       phoneNumber: normalizedPhone,
     });
 
-    const attendance = await attendanceService.checkIn(visitor.id);
+    const attendance = await attendanceService.checkIn(visitor.id, data.hostName);
 
     return {
       visitor: {
@@ -42,6 +43,7 @@ export class VisitorsService {
       },
       attendance: {
         id: attendance.id,
+        hostName: attendance.hostName,
         checkIn: attendance.checkIn,
         status: 'CHECKED_IN',
       },
@@ -157,19 +159,36 @@ export class VisitorsService {
   }
 
   /**
-   * Staff directory listing with debounced partial search by name or phone (FR-11).
+   * Staff directory listing with debounced partial search by name/phone and session status filter (FR-11).
    */
   async listVisitors(query: Record<string, unknown>) {
     const pagination = parsePagination(query, 10, 100);
     const search = typeof query.search === 'string' ? query.search : undefined;
+    const status =
+      query.status === 'ACTIVE' || query.status === 'CHECKED_OUT'
+        ? (query.status as 'ACTIVE' | 'CHECKED_OUT')
+        : undefined;
 
     const [visitors, total] = await this.repo.findManyPaginated({
       skip: pagination.skip,
       take: pagination.take,
       search,
+      status,
     });
 
-    return createPaginatedResponse(visitors, total, pagination.page, pagination.limit);
+    const formatted = visitors.map((v) => {
+      const { attendances, ...rest } = v as typeof v & {
+        attendances?: Array<{ id: string; checkIn: Date; hostName: string | null }>;
+      };
+      const activeSession = Array.isArray(attendances) && attendances.length > 0 ? attendances[0] : null;
+      return {
+        ...rest,
+        hasActiveSession: Boolean(activeSession),
+        activeSession,
+      };
+    });
+
+    return createPaginatedResponse(formatted, total, pagination.page, pagination.limit);
   }
 
   /**

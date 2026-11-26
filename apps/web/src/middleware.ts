@@ -12,5 +12,7 @@ export function middleware(_request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.svg).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|logo.svg|workspace-hero.svg|manifest.json|sw.js|icon-192.png|icon-512.png|apple-touch-icon.png).*)',
+  ],
 };

@@ -20,7 +20,7 @@ export function Input({ label, helperText, error, className = '', id, ...props }
       )}
       <input
         id={inputId}
-        className={`w-full px-3.5 py-2.5 border rounded-lg text-sm text-[#111827] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E] transition ${error ? 'border-red-300 bg-red-50/30' : 'border-[#DCE3EB] bg-white'
+        className={`w-full px-3.5 py-2.5 min-h-[44px] border rounded-lg text-base sm:text-sm text-[#111827] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E] transition ${error ? 'border-red-300 bg-red-50/30' : 'border-[#DCE3EB] bg-white'
           } ${className}`}
         {...props}
       />

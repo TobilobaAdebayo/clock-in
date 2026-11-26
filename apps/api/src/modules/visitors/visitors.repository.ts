@@ -34,14 +34,16 @@ export class VisitorsRepository {
   }
 
   /**
-   * Paginated directory search matching partial name or phone number (FR-11).
+   * Paginated directory search matching partial name or phone number,
+   * with optional active-session status filter (FR-11).
    */
   async findManyPaginated(params: {
     skip: number;
     take: number;
     search?: string;
+    status?: 'ACTIVE' | 'CHECKED_OUT';
   }): Promise<[Visitor[], number]> {
-    const { skip, take, search } = params;
+    const { skip, take, search, status } = params;
 
     const where: Prisma.VisitorWhereInput = {};
 
@@ -62,6 +64,20 @@ export class VisitorsRepository {
       ];
     }
 
+    if (status === 'ACTIVE') {
+      where.attendances = {
+        some: {
+          checkOut: null,
+        },
+      };
+    } else if (status === 'CHECKED_OUT') {
+      where.attendances = {
+        none: {
+          checkOut: null,
+        },
+      };
+    }
+
     return prisma.$transaction([
       prisma.visitor.findMany({
         where,
@@ -69,6 +85,18 @@ export class VisitorsRepository {
         take,
         orderBy: {
           fullName: 'asc',
+        },
+        include: {
+          attendances: {
+            where: { checkOut: null },
+            select: {
+              id: true,
+              checkIn: true,
+              hostName: true,
+            },
+            orderBy: { checkIn: 'desc' },
+            take: 1,
+          },
         },
       }),
       prisma.visitor.count({ where }),

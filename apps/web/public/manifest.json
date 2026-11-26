@@ -1,0 +1,25 @@
+{
+  "name": "Dare Adeboye Innovation Hub - Clock In",
+  "short_name": "DAIH Clock In",
+  "description": "Visitor check-in and workspace attendance portal for Dare Adeboye Innovation Hub.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F7F9FB",
+  "theme_color": "#34526E",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

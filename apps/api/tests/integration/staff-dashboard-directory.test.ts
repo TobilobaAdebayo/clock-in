@@ -177,6 +177,7 @@ describe('Receptionist Dashboard, Directory & Profiles (M4 Integration)', () => 
           {
             id: 'att-1',
             visitorId: 'vis-1',
+            hostName: 'Operations Lead',
             checkIn: new Date(),
             checkOut: new Date(),
             createdAt: new Date(),

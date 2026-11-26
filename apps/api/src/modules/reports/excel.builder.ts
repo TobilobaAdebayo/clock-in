@@ -5,6 +5,7 @@ import { env } from '../../config/env.js';
 
 export interface AttendanceExportRow {
   id: string;
+  hostName?: string | null;
   checkIn: Date;
   checkOut: Date | null;
   visitor: {
@@ -31,12 +32,13 @@ export class ExcelReportBuilder {
     // Column definitions
     worksheet.columns = [
       { header: 'S/N', key: 'sn', width: 8 },
-      { header: 'Visitor Name', key: 'visitorName', width: 26 },
+      { header: 'Visitor Name', key: 'visitorName', width: 24 },
       { header: 'Phone Number', key: 'phoneNumber', width: 18 },
+      { header: 'Here To See', key: 'hostName', width: 24 },
       { header: 'Attendance Date', key: 'attendanceDate', width: 18 },
       { header: 'Time In', key: 'timeIn', width: 14 },
-      { header: 'Time Out', key: 'timeOut', width: 24 },
-      { header: 'Attendance Status', key: 'attendanceStatus', width: 24 },
+      { header: 'Time Out', key: 'timeOut', width: 18 },
+      { header: 'Attendance Status', key: 'attendanceStatus', width: 22 },
     ];
 
     // Style the header row
@@ -88,6 +90,7 @@ export class ExcelReportBuilder {
       sn: serialNumber,
       visitorName: record.visitor.fullName,
       phoneNumber: record.visitor.phoneNumber,
+      hostName: record.hostName || '—',
       attendanceDate: dateFormatted,
       timeIn: timeInFormatted,
       timeOut: timeOutFormatted,

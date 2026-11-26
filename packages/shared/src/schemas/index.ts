@@ -7,6 +7,7 @@ export const RoleSchema = z.enum(ROLES);
 export const RegisterVisitorSchema = z.object({
   fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
   phoneNumber: z.string().trim().min(7, 'Invalid phone number').max(20),
+  hostName: z.string().trim().max(150).optional(),
 });
 
 export const LookupVisitorSchema = z.object({
@@ -22,6 +23,7 @@ export const ConfirmVisitorIdentitySchema = z.object({
 export const CheckInSchema = z.object({
   visitorId: z.uuid().optional(),
   lookupToken: z.string().optional(),
+  hostName: z.string().trim().max(150).optional(),
 });
 
 export const CheckOutSchema = z.object({

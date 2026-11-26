@@ -40,6 +40,7 @@ model Visitor {
 model Attendance {
   id        String    @id @default(uuid())
   visitorId String    @map("visitor_id")
+  hostName  String?   @map("host_name")
   checkIn   DateTime  @default(now()) @map("check_in")
   checkOut  DateTime? @map("check_out")
   createdAt DateTime  @default(now()) @map("created_at")

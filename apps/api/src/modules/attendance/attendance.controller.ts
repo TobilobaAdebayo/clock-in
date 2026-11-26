@@ -5,11 +5,11 @@ import { env } from '../../config/env.js';
 import { BadRequestError, UnauthorizedError } from '../../shared/errors/app-error.js';
 
 export class AttendanceController {
-  constructor(private service: AttendanceService = attendanceService) {}
+  constructor(private service: AttendanceService = attendanceService) { }
 
   checkIn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { visitorId, actionToken } = req.body;
+      const { visitorId, actionToken, hostName } = req.body;
 
       let targetVisitorId = visitorId;
 
@@ -29,7 +29,8 @@ export class AttendanceController {
         throw new BadRequestError('Visitor identification is required for check-in.');
       }
 
-      const session = await this.service.checkIn(targetVisitorId);
+      const cleanHostName = typeof hostName === 'string' ? hostName.trim().slice(0, 150) : undefined;
+      const session = await this.service.checkIn(targetVisitorId, cleanHostName);
 
       res.status(201).json({
         success: true,
@@ -37,6 +38,7 @@ export class AttendanceController {
         data: {
           attendanceId: session.id,
           visitorId: session.visitorId,
+          hostName: session.hostName,
           checkIn: session.checkIn,
           status: 'CHECKED_IN',
         },

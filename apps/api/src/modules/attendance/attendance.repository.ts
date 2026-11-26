@@ -20,10 +20,16 @@ export class AttendanceRepository {
     });
   }
 
-  async create(visitorId: string, tx: Prisma.TransactionClient = prisma): Promise<Attendance> {
+  async create(
+    visitorId: string,
+    tx: Prisma.TransactionClient = prisma,
+    hostName?: string | null,
+  ): Promise<Attendance> {
+    const cleanHost = hostName?.trim() || null;
     return tx.attendance.create({
       data: {
         visitorId,
+        hostName: cleanHost,
         checkIn: new Date(),
         checkOut: null,
       },
@@ -83,15 +89,14 @@ export class AttendanceRepository {
       where.checkOut = { not: null };
     }
 
-    // Visitor search filter (name or phone)
+    // Visitor search filter (name, phone, or who they came to see)
     if (search && search.trim()) {
       const cleanSearch = search.trim();
-      where.visitor = {
-        OR: [
-          { fullName: { contains: cleanSearch, mode: 'insensitive' } },
-          { phoneNumber: { contains: cleanSearch } },
-        ],
-      };
+      where.OR = [
+        { visitor: { fullName: { contains: cleanSearch, mode: 'insensitive' } } },
+        { visitor: { phoneNumber: { contains: cleanSearch } } },
+        { hostName: { contains: cleanSearch, mode: 'insensitive' } },
+      ];
     }
 
     return prisma.$transaction([

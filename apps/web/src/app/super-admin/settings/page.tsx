@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../../../lib/api-client';
 import { PageHeader } from '../../../components/layout';
+import { TwoFactorCard } from '../../../components/pages/SecurityView';
 import { Button, Card, Input } from '../../../components/ui';
 
 interface WorkspaceSettings {
@@ -117,6 +118,9 @@ export default function SuperAdminSettingsPage() {
           </div>
         </form>
       </Card>
+
+      {/* Two-Factor Authentication (Optional for Staff) */}
+      <TwoFactorCard />
     </div>
   );
 }

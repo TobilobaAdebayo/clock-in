@@ -11,13 +11,14 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { label: 'S/N', x: 40, width: 38 },
-  { label: 'Visitor Name', x: 78, width: 175 },
-  { label: 'Phone Number', x: 253, width: 125 },
-  { label: 'Attendance Date', x: 378, width: 120 },
-  { label: 'Time In', x: 498, width: 85 },
-  { label: 'Time Out', x: 583, width: 85 },
-  { label: 'Status', x: 668, width: 134 },
+  { label: 'S/N', x: 40, width: 32 },
+  { label: 'Visitor Name', x: 72, width: 138 },
+  { label: 'Phone Number', x: 210, width: 108 },
+  { label: 'Here To See', x: 318, width: 125 },
+  { label: 'Date', x: 443, width: 100 },
+  { label: 'Time In', x: 543, width: 72 },
+  { label: 'Time Out', x: 615, width: 72 },
+  { label: 'Status', x: 687, width: 115 },
 ];
 
 export class PdfReportBuilder {
@@ -108,6 +109,7 @@ export class PdfReportBuilder {
             String(index + 1),
             record.visitor.fullName,
             record.visitor.phoneNumber,
+            record.hostName || '—',
             dateFormatted,
             timeInFormatted,
             timeOutFormatted,

@@ -14,6 +14,12 @@ const correctAttendanceSchema = z.object({
   reason: z.string().min(5, 'Correction reason must be at least 5 characters'),
 });
 
+const manualCheckInSchema = z.object({
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').max(100),
+  phoneNumber: z.string().trim().min(7, 'Invalid phone number').max(20),
+  hostName: z.string().trim().min(2, 'Please enter who they are here to see').max(150),
+});
+
 // Staff authentication required
 attendanceStaffRouter.use(authenticate);
 
@@ -43,6 +49,26 @@ attendanceStaffRouter.get(
       res.status(200).json({
         success: true,
         data: activeVisitors,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Receptionist (and Super Admin): Manual visitor check-in
+attendanceStaffRouter.post(
+  '/manual-check-in',
+  requireRole(Role.RECEPTIONIST, Role.SUPER_ADMIN),
+  validateBody(manualCheckInSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const actorId = req.user!.staffId;
+      const result = await attendanceService.manualCheckIn(req.body, actorId);
+      res.status(201).json({
+        success: true,
+        message: 'Visitor checked in successfully.',
+        data: result,
       });
     } catch (error) {
       next(error);

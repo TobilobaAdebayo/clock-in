@@ -25,6 +25,7 @@ interface ProfileData {
 
 interface AttendanceRecord {
   id: string;
+  hostName?: string | null;
   checkIn: string;
   checkOut: string | null;
 }
@@ -130,6 +131,7 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
                 <th className="px-6 py-3.5">Day &amp; Date</th>
+                <th className="px-6 py-3.5">Here To See</th>
                 <th className="px-6 py-3.5">Time In</th>
                 <th className="px-6 py-3.5">Time Out</th>
                 <th className="px-6 py-3.5">Status</th>
@@ -138,7 +140,7 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
             <tbody className="divide-y divide-[#EEF2F6]">
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-[#6B7A8C]">
+                  <td colSpan={5} className="px-6 py-8 text-center text-[#6B7A8C]">
                     No attendance records for this visitor yet.
                   </td>
                 </tr>
@@ -148,6 +150,7 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
                     <td className="px-6 py-4 font-semibold text-[#111827]">
                       {formatDayAndDate(record.checkIn)}
                     </td>
+                    <td className="px-6 py-4 text-[#1F2937]">{record.hostName || '—'}</td>
                     <td className="px-6 py-4">{formatTime(record.checkIn)}</td>
                     <td className="px-6 py-4">
                       {record.checkOut ? formatTime(record.checkOut) : '—'}

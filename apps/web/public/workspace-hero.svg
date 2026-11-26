@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1100" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="900" y2="650" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#DCE8F3"/>
+      <stop offset="55%" stop-color="#EEF4FA"/>
+      <stop offset="100%" stop-color="#FDF8F2"/>
+    </linearGradient>
+    <linearGradient id="wallLeft" x1="0" y1="0" x2="900" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#243B53"/>
+      <stop offset="100%" stop-color="#34526E"/>
+    </linearGradient>
+    <linearGradient id="sunBeam" x1="200" y1="120" x2="720" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="740" x2="0" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E7EDF3"/>
+      <stop offset="100%" stop-color="#CFDCE8"/>
+    </linearGradient>
+    <linearGradient id="woodDesk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#D4A373"/>
+      <stop offset="50%" stop-color="#E2B88C"/>
+      <stop offset="100%" stop-color="#C69262"/>
+    </linearGradient>
+    <linearGradient id="receptionFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#34526E"/>
+      <stop offset="100%" stop-color="#1E3448"/>
+    </linearGradient>
+    <linearGradient id="glassTint" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#9BB6CE" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Base Architectural Backdrop -->
+  <rect width="900" height="1100" fill="url(#wallLeft)"/>
+
+  <!-- Large Panoramic Innovation Hub Windows -->
+  <rect x="76" y="72" width="748" height="580" rx="18" fill="url(#sky)"/>
+  <!-- Subtle distant skyline / sunlit horizon -->
+  <path d="M76 485 L210 462 L210 652 L76 652 Z" fill="#C9D9E8" opacity="0.65"/>
+  <path d="M235 420 L360 420 L360 652 L235 652 Z" fill="#BDD0E2" opacity="0.55"/>
+  <path d="M390 455 L540 435 L540 652 L390 652 Z" fill="#C7D7E6" opacity="0.5"/>
+  <path d="M580 390 L735 390 L735 652 L580 652 Z" fill="#B5CADE" opacity="0.55"/>
+  <path d="M750 470 L824 460 L824 652 L750 652 Z" fill="#C6D6E5" opacity="0.5"/>
+  <!-- Soft sun glow -->
+  <circle cx="670" cy="210" r="110" fill="#FFF7E6" opacity="0.72"/>
+  <circle cx="670" cy="210" r="62" fill="#FFFFFF" opacity="0.82"/>
+  <!-- Window glass reflection -->
+  <rect x="76" y="72" width="748" height="580" rx="18" fill="url(#glassTint)"/>
+
+  <!-- Window Architectural Mullions -->
+  <rect x="320" y="72" width="14" height="580" fill="#243B53"/>
+  <rect x="570" y="72" width="14" height="580" fill="#243B53"/>
+  <rect x="76" y="348" width="748" height="12" fill="#243B53"/>
+  <rect x="76" y="72" width="748" height="580" rx="18" stroke="#1B2E42" stroke-width="14"/>
+
+  <!-- Floor -->
+  <rect x="0" y="690" width="900" height="410" fill="url(#floor)"/>
+  <line x1="0" y1="690" x2="900" y2="690" stroke="#B7C8D9" stroke-width="3"/>
+
+  <!-- Diagonal Sunlight Beam across Lobby -->
+  <polygon points="334,80 820,80 900,980 120,980" fill="url(#sunBeam)"/>
+
+  <!-- Modern Pendant Lights -->
+  <g stroke="#1E3448" stroke-width="3">
+    <line x1="250" y1="0" x2="250" y2="210"/>
+    <line x1="450" y1="0" x2="450" y2="180"/>
+    <line x1="650" y1="0" x2="650" y2="210"/>
+  </g>
+  <g>
+    <path d="M214 210 Q250 185 286 210 L294 232 L206 232 Z" fill="#1E3448"/>
+    <ellipse cx="250" cy="233" rx="34" ry="7" fill="#FDE68A" opacity="0.9"/>
+    <path d="M414 180 Q450 155 486 180 L494 202 L406 202 Z" fill="#1E3448"/>
+    <ellipse cx="450" cy="203" rx="34" ry="7" fill="#FDE68A" opacity="0.9"/>
+    <path d="M614 210 Q650 185 686 210 L694 232 L606 232 Z" fill="#1E3448"/>
+    <ellipse cx="650" cy="233" rx="34" ry="7" fill="#FDE68A" opacity="0.9"/>
+  </g>
+
+  <!-- Background Co-Working Table & Chairs (Soft Depth) -->
+  <g opacity="0.92">
+    <rect x="130" y="625" width="230" height="14" rx="5" fill="#D9B18A"/>
+    <rect x="148" y="639" width="8" height="72" fill="#34526E"/>
+    <rect x="336" y="639" width="8" height="72" fill="#34526E"/>
+    <!-- Laptops on collab desk -->
+    <polygon points="175,625 220,625 212,596 168,596" fill="#334155"/>
+    <rect x="172" y="622" width="52" height="4" rx="2" fill="#64748B"/>
+    <polygon points="275,625 320,625 328,596 284,596" fill="#475569"/>
+    <rect x="272" y="622" width="52" height="4" rx="2" fill="#64748B"/>
+  </g>
+
+  <!-- Right-Side Lounge Chair & Side Table -->
+  <g>
+    <rect x="655" y="618" width="118" height="86" rx="22" fill="#4A6B8A"/>
+    <rect x="645" y="656" width="138" height="58" rx="16" fill="#34526E"/>
+    <rect x="665" y="714" width="10" height="32" rx="4" fill="#1E3448"/>
+    <rect x="753" y="714" width="10" height="32" rx="4" fill="#1E3448"/>
+  </g>
+
+  <!-- Lush Indoor Planter Left -->
+  <g>
+    <ellipse cx="142" cy="755" rx="56" ry="12" fill="#9FB6CA" opacity="0.45"/>
+    <path d="M108 665 L176 665 L166 755 L118 755 Z" fill="#FFFFFF" stroke="#DCE6EE" stroke-width="3"/>
+    <!-- Botanical leaves -->
+    <path d="M142 665 C135 615 95 575 78 552 C110 562 138 595 142 640 Z" fill="#2F6F5E"/>
+    <path d="M142 665 C148 605 186 565 210 542 C188 584 162 618 145 660 Z" fill="#3D8A74"/>
+    <path d="M142 665 C128 595 130 532 146 496 C158 540 154 602 145 660 Z" fill="#265C4E"/>
+    <path d="M142 665 C115 628 84 615 66 612 C94 630 116 646 138 665 Z" fill="#469982"/>
+  </g>
+
+  <!-- Foreground Modern Innovation Hub Reception Desk -->
+  <g>
+    <!-- Soft floor shadow -->
+    <ellipse cx="470" cy="952" rx="320" ry="26" fill="#8FA8BF" opacity="0.38"/>
+    <!-- Wooden upper counter -->
+    <rect x="195" y="756" width="550" height="28" rx="10" fill="url(#woodDesk)"/>
+    <!-- Navy-slate ribbed desk facade -->
+    <rect x="210" y="784" width="520" height="162" rx="14" fill="url(#receptionFront)"/>
+    <!-- Architectural vertical flutes -->
+    <g stroke="#456787" stroke-width="2" opacity="0.45">
+      <line x1="242" y1="798" x2="242" y2="932"/>
+      <line x1="266" y1="798" x2="266" y2="932"/>
+      <line x1="290" y1="798" x2="290" y2="932"/>
+      <line x1="314" y1="798" x2="314" y2="932"/>
+      <line x1="338" y1="798" x2="338" y2="932"/>
+      <line x1="602" y1="798" x2="602" y2="932"/>
+      <line x1="626" y1="798" x2="626" y2="932"/>
+      <line x1="650" y1="798" x2="650" y2="932"/>
+      <line x1="674" y1="798" x2="674" y2="932"/>
+      <line x1="698" y1="798" x2="698" y2="932"/>
+    </g>
+    <!-- Center warm accent panel -->
+    <rect x="372" y="810" width="196" height="110" rx="14" fill="#243B53" stroke="#537799" stroke-width="2"/>
+    <circle cx="470" cy="865" r="28" fill="#EEF3F7" opacity="0.16"/>
+    <circle cx="470" cy="865" r="14" fill="#E2B88C"/>
+    <!-- Base kickplate -->
+    <rect x="228" y="942" width="484" height="10" rx="4" fill="#132230"/>
+
+    <!-- Desk accessories: sleek tablet stand & coffee cup & small desk plant -->
+    <rect x="424" y="692" width="92" height="58" rx="8" fill="#111827" stroke="#CBD5E1" stroke-width="3"/>
+    <rect x="432" y="700" width="76" height="42" rx="4" fill="#EEF3F7"/>
+    <rect x="444" y="712" width="52" height="6" rx="3" fill="#34526E"/>
+    <rect x="452" y="724" width="36" height="6" rx="3" fill="#94A3B8"/>
+    <path d="M462 750 L478 750 L484 756 L456 756 Z" fill="#64748B"/>
+
+    <!-- Desk mug -->
+    <rect x="300" y="728" width="24" height="28" rx="5" fill="#FFFFFF"/>
+    <path d="M324 734 C332 734 332 748 324 748" stroke="#FFFFFF" stroke-width="3.5" fill="none"/>
+
+    <!-- Small desk succulent -->
+    <rect x="612" y="730" width="32" height="26" rx="6" fill="#E2E8F0"/>
+    <circle cx="628" cy="722" r="12" fill="#3D8A74"/>
+    <circle cx="619" cy="726" r="8" fill="#2F6F5E"/>
+    <circle cx="637" cy="726" r="8" fill="#469982"/>
+  </g>
+</svg>

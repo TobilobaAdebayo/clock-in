@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, ShieldCheck, X } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 
 const HUB_NAME = 'Dare Adeboye Innovation Hub';
@@ -22,9 +22,7 @@ export function Sidebar() {
     { label: 'Dashboard', href: basePath, exact: true },
     { label: 'Visitors', href: `${basePath}/visitors`, exact: false },
     { label: 'Attendance', href: `${basePath}/attendance`, exact: false },
-    { label: 'Active Visitors', href: `${basePath}/active`, exact: false },
     { label: 'Reports', href: `${basePath}/reports`, exact: false },
-    { label: 'Security (2FA)', href: `${basePath}/security`, exact: false },
   ];
 
   const adminItems = [
@@ -102,23 +100,35 @@ export function Sidebar() {
             <span className="capitalize">{user.role.replace('_', ' ').toLowerCase()}</span>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            logout(
-              pathname.startsWith('/super-admin')
-                ? '/super-admin'
-                : pathname.startsWith('/staff')
-                ? '/staff'
-                : '/staff-login',
-            )
-          }
-          title="Sign out"
-          aria-label="Sign out"
-          className="text-[#6B7A8C] hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition flex-shrink-0"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!isSuperAdmin && (
+            <Link
+              href="/staff/security"
+              title="2FA Settings (Optional)"
+              aria-label="2FA Settings"
+              className="text-[#6B7A8C] hover:text-[#34526E] p-2 rounded-lg hover:bg-[#EEF3F7] transition"
+            >
+              <ShieldCheck className="w-4 h-4" />
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              logout(
+                pathname.startsWith('/super-admin')
+                  ? '/super-admin'
+                  : pathname.startsWith('/staff')
+                  ? '/staff'
+                  : '/staff-login',
+              )
+            }
+            title="Sign out"
+            aria-label="Sign out"
+            className="text-[#6B7A8C] hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition flex-shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );

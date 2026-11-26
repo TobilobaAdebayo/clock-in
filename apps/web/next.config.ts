@@ -10,6 +10,8 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
+  "worker-src 'self'",
+  "manifest-src 'self'",
   `connect-src 'self' ${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",

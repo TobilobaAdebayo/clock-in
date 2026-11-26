@@ -19,6 +19,7 @@ describe('Public Visitor Check-In & Check-Out Flow (M2 Integration)', () => {
   const mockOpenAttendance = {
     id: 'attendance-uuid-1',
     visitorId: 'visitor-uuid-1',
+    hostName: 'Mr. Tunde',
     checkIn: new Date(),
     checkOut: null,
     createdAt: new Date(),

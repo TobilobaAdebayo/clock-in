@@ -50,6 +50,7 @@ export class ReportsRepository {
         orderBy: { checkIn: 'desc' },
         select: {
           id: true,
+          hostName: true,
           checkIn: true,
           checkOut: true,
           visitor: {

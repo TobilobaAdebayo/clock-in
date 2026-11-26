@@ -19,6 +19,7 @@ export interface DashboardSummary {
   };
   recentCheckIns: Array<{
     id: string;
+    hostName: string | null;
     checkIn: Date;
     checkOut: Date | null;
     visitor: {

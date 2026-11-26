@@ -104,10 +104,11 @@ describe('M8 UAT Real-World End-to-End Scenarios', () => {
     vi.spyOn(attendanceRepository, 'findActiveByVisitorId').mockImplementation(async (vid) =>
       sessions.find((s) => s.visitorId === vid && s.checkOut === null) || null,
     );
-    vi.spyOn(attendanceRepository, 'create').mockImplementation(async (vid) => {
+    vi.spyOn(attendanceRepository, 'create').mockImplementation(async (vid, _tx, hostName) => {
       const session = {
         id: `uat-att-${sessions.length + 1}`,
         visitorId: vid,
+        hostName: hostName ?? null,
         checkIn: new Date(checkInTime.getTime() + sessions.length * 3600_000),
         checkOut: null,
         createdAt: new Date(),

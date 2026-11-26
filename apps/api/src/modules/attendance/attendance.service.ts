@@ -1,21 +1,24 @@
 import { Attendance, Prisma } from '@prisma/client';
 import { prisma } from '../../shared/db/prisma.js';
 import { attendanceRepository, AttendanceRepository } from './attendance.repository.js';
+import { visitorsRepository, VisitorsRepository } from '../visitors/visitors.repository.js';
 import { auditService, AuditService } from '../audit/audit.service.js';
 import { parsePagination, createPaginatedResponse } from '../../shared/utils/pagination.js';
+import { normalizePhoneNumber } from '../../shared/utils/phone.js';
 import { ConflictError, BadRequestError, NotFoundError } from '../../shared/errors/app-error.js';
 
 export class AttendanceService {
   constructor(
     private repo: AttendanceRepository = attendanceRepository,
     private audit: AuditService = auditService,
+    private visitorRepo: VisitorsRepository = visitorsRepository,
   ) {}
 
   /**
    * Checks in a visitor with server-generated timestamp.
    * Enforces the active session rule (FR-04, FR-06) within a transaction.
    */
-  async checkIn(visitorId: string): Promise<Attendance> {
+  async checkIn(visitorId: string, hostName?: string): Promise<Attendance> {
     try {
       return await prisma.$transaction(async (tx) => {
         const existingActive = await this.repo.findActiveByVisitorId(visitorId, tx);
@@ -26,7 +29,7 @@ export class AttendanceService {
           );
         }
 
-        return await this.repo.create(visitorId, tx);
+        return await this.repo.create(visitorId, tx, hostName);
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -171,6 +174,76 @@ export class AttendanceService {
    */
   async getActiveSessions() {
     return this.repo.findActiveSessions();
+  }
+
+  /**
+   * Receptionist manual check-in: finds existing visitor by phone (or registers them if new)
+   * and immediately creates an active attendance session with audit logging.
+   */
+  async manualCheckIn(
+    input: { fullName: string; phoneNumber: string; hostName: string },
+    actorId: string,
+  ) {
+    const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
+    const cleanName = input.fullName.trim();
+    const cleanHost = input.hostName.trim();
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        let visitor = await this.visitorRepo.findByPhoneNumber(normalizedPhone, tx);
+        let createdNewVisitor = false;
+
+        if (!visitor) {
+          visitor = await this.visitorRepo.create(
+            {
+              fullName: cleanName,
+              phoneNumber: normalizedPhone,
+            },
+            tx,
+          );
+          createdNewVisitor = true;
+        }
+
+        const existingActive = await this.repo.findActiveByVisitorId(visitor.id, tx);
+        if (existingActive) {
+          throw new ConflictError(
+            `${visitor.fullName} is already checked in with an active session.`,
+            { activeSessionId: existingActive.id, checkIn: existingActive.checkIn },
+          );
+        }
+
+        const attendance = await this.repo.create(visitor.id, tx, cleanHost);
+
+        await this.audit.record(
+          {
+            actorId,
+            action: 'MANUAL_CHECK_IN',
+            recordType: 'ATTENDANCE',
+            recordId: attendance.id,
+            newValues: {
+              visitorId: visitor.id,
+              fullName: visitor.fullName,
+              phoneNumber: visitor.phoneNumber,
+              hostName: cleanHost,
+              createdNewVisitor,
+              checkIn: attendance.checkIn.toISOString(),
+            },
+          },
+          tx,
+        );
+
+        return {
+          visitor,
+          attendance,
+          createdNewVisitor,
+        };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictError('Visitor is already checked in with an active visit session.');
+      }
+      throw error;
+    }
   }
 }
 
