@@ -23,7 +23,7 @@ const manualCheckInSchema = z.object({
     .refine((val) => !val || (val.length >= 7 && val.length <= 20), {
       message: 'Invalid phone number',
     }),
-  hostName: z.string().trim().min(2, 'Please enter who they are here to see').max(150),
+  hostName: z.string().trim().max(150).optional(),
 });
 
 // Staff authentication required
@@ -48,13 +48,23 @@ attendanceStaffRouter.get(
 
 attendanceStaffRouter.get(
   '/active',
-  requireRole(Role.RECEPTIONIST, Role.SUPER_ADMIN),
-  async (_req: Request, res: Response, next: NextFunction) => {
+  requireRole(Role.SECURITY, Role.RECEPTIONIST, Role.SUPER_ADMIN),
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const activeVisitors = await attendanceService.getActiveSessions();
+      // Privacy: Security does not need visitor phone numbers to sign visitors in/out
+      const data =
+        req.user!.role === Role.SECURITY
+          ? activeVisitors.map((session) => ({
+              ...session,
+              visitor: session.visitor
+                ? { id: session.visitor.id, fullName: session.visitor.fullName }
+                : session.visitor,
+            }))
+          : activeVisitors;
       res.status(200).json({
         success: true,
-        data: activeVisitors,
+        data,
       });
     } catch (error) {
       next(error);
@@ -62,19 +72,41 @@ attendanceStaffRouter.get(
   },
 );
 
-// Receptionist (and Super Admin): Manual visitor check-in
+// Security, Receptionist, and Super Admin: Manual visitor check-in
 attendanceStaffRouter.post(
   '/manual-check-in',
-  requireRole(Role.RECEPTIONIST, Role.SUPER_ADMIN),
+  requireRole(Role.SECURITY, Role.RECEPTIONIST, Role.SUPER_ADMIN),
   validateBody(manualCheckInSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const actorId = req.user!.staffId;
-      const result = await attendanceService.manualCheckIn(req.body, actorId);
+      const actorRole = req.user!.role;
+      const result = await attendanceService.manualCheckIn(req.body, actorId, actorRole);
       res.status(201).json({
         success: true,
         message: 'Visitor checked in successfully.',
         data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Security, Receptionist, and Super Admin: Manual visitor check-out
+attendanceStaffRouter.post(
+  '/:id/manual-check-out',
+  requireRole(Role.SECURITY, Role.RECEPTIONIST, Role.SUPER_ADMIN),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const actorId = req.user!.staffId;
+      const actorRole = req.user!.role;
+      const closed = await attendanceService.manualCheckOut(id, actorId, actorRole);
+      res.status(200).json({
+        success: true,
+        message: 'Visitor signed out successfully.',
+        data: closed,
       });
     } catch (error) {
       next(error);

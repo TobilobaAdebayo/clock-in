@@ -1,4 +1,4 @@
-import { Attendance, Prisma } from '@prisma/client';
+import { Attendance, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../shared/db/prisma.js';
 import { attendanceRepository, AttendanceRepository } from './attendance.repository.js';
 import { visitorsRepository, VisitorsRepository } from '../visitors/visitors.repository.js';
@@ -177,24 +177,25 @@ export class AttendanceService {
   }
 
   /**
-   * Receptionist manual check-in: finds existing visitor by phone (or name when phone is omitted),
+   * Receptionist / Security manual check-in: finds existing visitor by phone (or name when phone is omitted),
    * or registers them if new, and immediately creates an active attendance session with audit logging.
    */
   async manualCheckIn(
-    input: { fullName: string; phoneNumber?: string | null; hostName: string },
+    input: { fullName: string; phoneNumber?: string | null; hostName?: string | null },
     actorId: string,
+    actorRole?: Role,
   ) {
     const cleanName = input.fullName.trim();
-    const cleanHost = input.hostName.trim();
+    const cleanHost = input.hostName?.trim() || undefined;
     const rawPhone = input.phoneNumber?.trim();
     const normalizedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : null;
 
     try {
       return await prisma.$transaction(async (tx) => {
+        // Match existing returning visitor by phone when provided, otherwise by exact full name
         let visitor = normalizedPhone
           ? await this.visitorRepo.findByPhoneNumber(normalizedPhone, tx)
-          : (await this.visitorRepo.findByFullName(cleanName, tx)).find((v) => !v.phoneNumber) ||
-            null;
+          : (await this.visitorRepo.findByFullName(cleanName, tx))[0] || null;
         let createdNewVisitor = false;
 
         if (!visitor) {
@@ -221,14 +222,14 @@ export class AttendanceService {
         await this.audit.record(
           {
             actorId,
-            action: 'MANUAL_CHECK_IN',
+            action: actorRole === Role.SECURITY ? 'SECURITY_CHECK_IN' : 'MANUAL_CHECK_IN',
             recordType: 'ATTENDANCE',
             recordId: attendance.id,
             newValues: {
               visitorId: visitor.id,
               fullName: visitor.fullName,
               phoneNumber: visitor.phoneNumber,
-              hostName: cleanHost,
+              hostName: cleanHost ?? null,
               createdNewVisitor,
               checkIn: attendance.checkIn.toISOString(),
             },
@@ -237,7 +238,10 @@ export class AttendanceService {
         );
 
         return {
-          visitor,
+          visitor:
+            actorRole === Role.SECURITY
+              ? { id: visitor.id, fullName: visitor.fullName }
+              : visitor,
           attendance,
           createdNewVisitor,
         };
@@ -248,6 +252,37 @@ export class AttendanceService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Receptionist / Security manual check-out: closes an open attendance session with audit logging.
+   */
+  async manualCheckOut(attendanceId: string, actorId: string, actorRole?: Role): Promise<Attendance> {
+    return prisma.$transaction(async (tx) => {
+      const existing = await this.repo.findById(attendanceId, tx);
+      if (!existing) {
+        throw new NotFoundError('Attendance session not found.');
+      }
+      if (existing.checkOut) {
+        throw new BadRequestError('This visitor has already been signed out.');
+      }
+
+      const closed = await this.repo.closeSession(attendanceId, new Date(), tx);
+
+      await this.audit.record(
+        {
+          actorId,
+          action: actorRole === Role.SECURITY ? 'SECURITY_CHECK_OUT' : 'MANUAL_CHECK_OUT',
+          recordType: 'ATTENDANCE',
+          recordId: attendanceId,
+          oldValues: { checkOut: null },
+          newValues: { checkOut: closed.checkOut?.toISOString() ?? null },
+        },
+        tx,
+      );
+
+      return closed;
+    });
   }
 }
 

@@ -7,9 +7,15 @@ export interface StaffUser {
   id: string;
   fullName: string;
   email: string;
-  role: 'RECEPTIONIST' | 'SUPER_ADMIN';
+  role: 'SECURITY' | 'RECEPTIONIST' | 'SUPER_ADMIN';
   twoFactorEnabled?: boolean;
 }
+
+const getPortalRouteForRole = (role: StaffUser['role']): string => {
+  if (role === 'SUPER_ADMIN') return '/super-admin';
+  if (role === 'SECURITY') return '/security';
+  return '/staff';
+};
 
 export interface TwoFactorChallenge {
   requiresTwoFactor: true;
@@ -125,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(staffUser);
 
       if (options?.redirect !== false) {
-        router.push(staffUser.role === 'SUPER_ADMIN' ? '/super-admin' : '/staff');
+        router.push(getPortalRouteForRole(staffUser.role));
       }
 
       return { requiresTwoFactor: false, staff: staffUser };
@@ -158,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(staffUser);
 
       if (options?.redirect !== false) {
-        router.push(staffUser.role === 'SUPER_ADMIN' ? '/super-admin' : '/staff');
+        router.push(getPortalRouteForRole(staffUser.role));
       }
 
       return staffUser;

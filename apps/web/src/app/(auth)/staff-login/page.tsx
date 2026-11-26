@@ -7,7 +7,7 @@ export default function StaffLoginPage() {
   return (
     <PortalLoginForm
       title="Staff Portal"
-      subtitle="Authorized Receptionist and Super Admin access only."
+      subtitle="Authorized Security, Receptionist, and Super Admin access only."
       placeholderEmail="admin@clockin.workspace"
       redirectOnLogin={true}
     />

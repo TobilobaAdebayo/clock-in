@@ -1,4 +1,5 @@
 export const ROLES = {
+  SECURITY: 'SECURITY',
   RECEPTIONIST: 'RECEPTIONIST',
   SUPER_ADMIN: 'SUPER_ADMIN',
 } as const;

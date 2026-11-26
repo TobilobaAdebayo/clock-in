@@ -1,12 +1,20 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { Sidebar, Topbar } from '../../components/layout';
 import { PortalLoginForm } from '../../components/auth/PortalLoginForm';
 
 export default function StaffPortalLayout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.role === 'SECURITY') {
+      router.push('/security');
+    }
+  }, [isLoading, isAuthenticated, user, router]);
 
   if (isLoading) {
     return (
@@ -28,6 +36,17 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
         placeholderEmail="receptionist@clockin.workspace"
         redirectOnLogin={false}
       />
+    );
+  }
+
+  if (user.role === 'SECURITY') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F9FB]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-[#34526E] border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-[#6B7A8C] font-medium">Redirecting to Security Desk...</span>
+        </div>
+      </div>
     );
   }
 

@@ -11,7 +11,7 @@ interface StaffItem {
   id: string;
   fullName: string;
   email: string;
-  role: 'RECEPTIONIST' | 'SUPER_ADMIN';
+  role: 'SECURITY' | 'RECEPTIONIST' | 'SUPER_ADMIN';
   isActive: boolean;
   twoFactorEnabled?: boolean;
   createdAt: string;
@@ -44,7 +44,7 @@ export default function StaffAccountsPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'RECEPTIONIST' | 'SUPER_ADMIN'>('RECEPTIONIST');
+  const [role, setRole] = useState<'SECURITY' | 'RECEPTIONIST' | 'SUPER_ADMIN'>('RECEPTIONIST');
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -172,7 +172,7 @@ export default function StaffAccountsPage() {
       <PageHeader
         eyebrow="DARE ADEBOYE INNOVATION HUB · SUPER ADMIN"
         title="Staff Accounts"
-        description="Create and manage Receptionist and Super Admin accounts."
+        description="Create and manage Security, Receptionist, and Super Admin accounts."
         actions={
           <Button onClick={openCreateModal}>
             <Plus className="w-4 h-4" />
@@ -243,6 +243,7 @@ export default function StaffAccountsPage() {
                 className="px-3 py-2 border border-[#DCE3EB] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E]"
               >
                 <option value="">All Roles</option>
+                <option value="SECURITY">Security</option>
                 <option value="RECEPTIONIST">Receptionists</option>
                 <option value="SUPER_ADMIN">Super Admins</option>
               </select>
@@ -328,7 +329,15 @@ export default function StaffAccountsPage() {
                     <td className="px-6 py-4 font-semibold text-[#111827]">{s.fullName}</td>
                     <td className="px-6 py-4">{s.email}</td>
                     <td className="px-6 py-4">
-                      <Badge tone={s.role === 'SUPER_ADMIN' ? 'info' : 'neutral'}>
+                      <Badge
+                        tone={
+                          s.role === 'SUPER_ADMIN'
+                            ? 'info'
+                            : s.role === 'SECURITY'
+                            ? 'warning'
+                            : 'neutral'
+                        }
+                      >
                         {s.role.replace('_', ' ')}
                       </Badge>
                     </td>
@@ -424,6 +433,7 @@ export default function StaffAccountsPage() {
               onChange={(e) => setRole(e.target.value as any)}
               className="w-full px-3.5 py-2.5 border border-[#DCE3EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E] bg-white"
             >
+              <option value="SECURITY">Security</option>
               <option value="RECEPTIONIST">Receptionist</option>
               <option value="SUPER_ADMIN">Super Admin</option>
             </select>

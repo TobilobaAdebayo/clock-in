@@ -12,7 +12,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && user.role !== 'SUPER_ADMIN') {
-      router.push('/staff');
+      router.push(user.role === 'SECURITY' ? '/security' : '/staff');
     }
   }, [isLoading, isAuthenticated, user, router]);
 

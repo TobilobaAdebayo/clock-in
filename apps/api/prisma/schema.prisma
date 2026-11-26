@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum Role {
+  SECURITY
   RECEPTIONIST
   SUPER_ADMIN
 }

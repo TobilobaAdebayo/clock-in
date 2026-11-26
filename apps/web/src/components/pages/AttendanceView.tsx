@@ -140,7 +140,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         body: JSON.stringify({
           fullName: manualFullName.trim(),
           ...(manualPhone.trim() ? { phoneNumber: manualPhone.trim() } : {}),
-          hostName: manualHostName.trim(),
+          ...(manualHostName.trim() ? { hostName: manualHostName.trim() } : {}),
         }),
       });
       setShowManualModal(false);
@@ -429,7 +429,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
       <Modal
         open={showManualModal}
         title="Manual Check-In"
-        subtitle="Enter the visitor's details below to register and clock them in immediately."
+        subtitle="Only Full Name is required. Works for both new and returning visitors."
         onClose={() => setShowManualModal(false)}
       >
         {manualError && (
@@ -458,9 +458,8 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
           />
 
           <Input
-            label="Who are you here to see?"
+            label="Who are you here to see? (Optional)"
             type="text"
-            required
             placeholder="e.g. Mr. Tunde / Operations Desk"
             value={manualHostName}
             onChange={(e) => setManualHostName(e.target.value)}

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { visitorsService, VisitorsService } from './visitors.service.js';
 
 export class VisitorsController {
-  constructor(private service: VisitorsService = visitorsService) {}
+  constructor(private service: VisitorsService = visitorsService) { }
 
   register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
