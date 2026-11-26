@@ -291,11 +291,11 @@ function VisitorsDirectoryContent() {
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Visitor Name</th>
-                <th className="px-6 py-3.5">Phone Number</th>
-                <th className="px-6 py-3.5">Session Status</th>
-                <th className="px-6 py-3.5">Registered On</th>
-                <th className="px-6 py-3.5 text-right">Profile</th>
+                <th className="px-6 py-4 whitespace-nowrap">Visitor Name</th>
+                <th className="px-6 py-4 whitespace-nowrap">Phone Number</th>
+                <th className="px-6 py-4 whitespace-nowrap">Session Status</th>
+                <th className="px-6 py-4 whitespace-nowrap">Registered On</th>
+                <th className="px-6 py-4 whitespace-nowrap text-right">Profile</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -314,7 +314,7 @@ function VisitorsDirectoryContent() {
               ) : (
                 displayedVisitors.map((visitor) => (
                   <tr key={visitor.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
                       <button
                         type="button"
                         onClick={() => openVisitorPopup(visitor.id)}
@@ -323,8 +323,10 @@ function VisitorsDirectoryContent() {
                         {visitor.fullName}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs">{visitor.phoneNumber || '—'}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 font-mono text-xs whitespace-nowrap">
+                      {visitor.phoneNumber || '—'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {visitor.hasActiveSession ? (
                         <div className="flex flex-col items-start gap-0.5">
                           <Badge tone="success">
@@ -344,17 +346,18 @@ function VisitorsDirectoryContent() {
                         <Badge tone="neutral">Clocked Out</Badge>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-xs text-[#6B7A8C]">
+                    <td className="px-6 py-4 text-xs text-[#6B7A8C] whitespace-nowrap">
                       {formatShortDayAndDate(visitor.createdAt)}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => openVisitorPopup(visitor.id)}
-                        className="text-xs font-semibold text-[#34526E] hover:underline"
                       >
                         View
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -445,11 +448,11 @@ function VisitorsDirectoryContent() {
                 <table className="w-full text-left text-xs text-[#475569]">
                   <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[10px] uppercase tracking-wider font-semibold">
                     <tr>
-                      <th className="px-4 py-2.5">Day &amp; Date</th>
-                      <th className="px-4 py-2.5">Here To See</th>
-                      <th className="px-4 py-2.5">Time In</th>
-                      <th className="px-4 py-2.5">Time Out</th>
-                      <th className="px-4 py-2.5">Status</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Day &amp; Date</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Here To See</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Time In</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Time Out</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EEF2F6]">
@@ -462,17 +465,21 @@ function VisitorsDirectoryContent() {
                     ) : (
                       modalHistory.map((record) => (
                         <tr key={record.id}>
-                          <td className="px-4 py-2.5 font-medium text-[#111827]">
+                          <td className="px-4 py-2.5 font-medium text-[#111827] whitespace-nowrap">
                             {formatDayAndDate(record.checkIn)}
                           </td>
-                          <td className="px-4 py-2.5 text-[#1F2937]">{record.hostName || '—'}</td>
-                          <td className="px-4 py-2.5">{formatTime(record.checkIn)}</td>
-                          <td className="px-4 py-2.5">
+                          <td className="px-4 py-2.5 text-[#1F2937] whitespace-nowrap">
+                            {record.hostName || '—'}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            {formatTime(record.checkIn)}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
                             {record.checkOut ? formatTime(record.checkOut) : '—'}
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className="px-4 py-2.5 whitespace-nowrap">
                             {record.checkOut ? (
-                              <Badge tone="neutral">Completed</Badge>
+                              <Badge tone="neutral">Clocked Out</Badge>
                             ) : (
                               <Badge tone="success">Active</Badge>
                             )}

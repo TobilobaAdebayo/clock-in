@@ -301,13 +301,13 @@ export default function StaffAccountsPage() {
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Name</th>
-                <th className="px-6 py-3.5">Email</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5">2FA</th>
-                <th className="px-6 py-3.5">Created</th>
-                <th className="px-6 py-3.5 text-right">Manage</th>
+                <th className="px-6 py-4 whitespace-nowrap">Name</th>
+                <th className="px-6 py-4 whitespace-nowrap">Email</th>
+                <th className="px-6 py-4 whitespace-nowrap">Role</th>
+                <th className="px-6 py-4 whitespace-nowrap">Status</th>
+                <th className="px-6 py-4 whitespace-nowrap">2FA</th>
+                <th className="px-6 py-4 whitespace-nowrap">Created</th>
+                <th className="px-6 py-4 whitespace-nowrap text-right">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -326,9 +326,11 @@ export default function StaffAccountsPage() {
               ) : (
                 filteredStaff.map((s) => (
                   <tr key={s.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">{s.fullName}</td>
-                    <td className="px-6 py-4">{s.email}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
+                      {s.fullName}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{s.email}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Badge
                         tone={
                           s.role === 'SUPER_ADMIN'
@@ -341,44 +343,48 @@ export default function StaffAccountsPage() {
                         {s.role.replace('_', ' ')}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Badge tone={s.isActive ? 'success' : 'danger'}>
                         {s.isActive ? 'Active' : 'Deactivated'}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Badge tone={s.twoFactorEnabled ? 'success' : 'neutral'}>
                         {s.twoFactorEnabled ? 'Enabled' : 'Off'}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-xs text-[#6B7A8C]">
+                    <td className="px-6 py-4 text-xs text-[#6B7A8C] whitespace-nowrap">
                       {formatShortDayAndDate(s.createdAt)}
                     </td>
-                    <td className="px-6 py-4 text-right space-x-3 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(s)}
-                        className="text-xs font-semibold text-[#34526E] hover:underline"
-                      >
-                        Edit
-                      </button>
-                      {s.twoFactorEnabled && (
-                        <button
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <Button
                           type="button"
-                          onClick={() => resetTwoFactor(s)}
-                          className="text-xs font-semibold text-amber-700 hover:underline"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openEditModal(s)}
                         >
-                          Reset 2FA
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => toggleStatus(s)}
-                        className={`text-xs font-semibold hover:underline ${s.isActive ? 'text-red-600' : 'text-emerald-700'
-                          }`}
-                      >
-                        {s.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
+                          Edit
+                        </Button>
+                        {s.twoFactorEnabled && (
+                          <Button
+                            type="button"
+                            variant="warning"
+                            size="sm"
+                            onClick={() => resetTwoFactor(s)}
+                          >
+                            Reset 2FA
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant={s.isActive ? 'danger' : 'primary'}
+                          size="sm"
+                          onClick={() => toggleStatus(s)}
+                        >
+                          {s.isActive ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

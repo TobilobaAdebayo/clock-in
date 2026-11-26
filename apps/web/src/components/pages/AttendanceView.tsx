@@ -34,26 +34,18 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
 
   const activeFilterCount = (startDate ? 1 : 0) + (endDate ? 1 : 0);
 
-  const [correctingRecord, setCorrectingRecord] = useState<AttendanceItem | null>(null);
-  const [checkInInput, setCheckInInput] = useState('');
-  const [checkOutInput, setCheckOutInput] = useState('');
-  const [leaveOpen, setLeaveOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [correcting, setCorrecting] = useState(false);
-  const [correctError, setCorrectError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [clockingOutId, setClockingOutId] = useState<string | null>(null);
 
-  // Staff Manual Clock-In / Clock-Out state (Receptionist & Super Admin)
+  // Staff Manual Clock-In Popup Modal state (Receptionist & Super Admin)
   const [showManualModal, setShowManualModal] = useState(false);
   const [manualFullName, setManualFullName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [manualHostName, setManualHostName] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
-  const [clockingOutId, setClockingOutId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
 
-  const canCorrect = user?.role === 'SUPER_ADMIN';
   const showManualCheckIn =
     user?.role === 'RECEPTIONIST' || user?.role === 'SUPER_ADMIN';
 
@@ -83,46 +75,6 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
     fetchAttendance(1);
   }, [status, search, startDate, endDate]);
 
-  const openCorrectionModal = (item: AttendanceItem) => {
-    setCorrectingRecord(item);
-    setCheckInInput(new Date(item.checkIn).toISOString().slice(0, 16));
-    setCheckOutInput(item.checkOut ? new Date(item.checkOut).toISOString().slice(0, 16) : '');
-    setLeaveOpen(!item.checkOut);
-    setReason('');
-    setCorrectError(null);
-  };
-
-  const handleCorrectSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!correctingRecord) return;
-    setCorrectError(null);
-
-    if (!reason.trim() || reason.trim().length < 5) {
-      setCorrectError('Please enter a reason of at least 5 characters.');
-      return;
-    }
-
-    try {
-      setCorrecting(true);
-      await apiClient(`/api/v1/attendance/${correctingRecord.id}/correct`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          checkIn: new Date(checkInInput).toISOString(),
-          checkOut: leaveOpen ? null : checkOutInput ? new Date(checkOutInput).toISOString() : null,
-          reason: reason.trim(),
-        }),
-      });
-
-      setSuccessMsg('Attendance record updated.');
-      setCorrectingRecord(null);
-      fetchAttendance(meta.page);
-    } catch (err: any) {
-      setCorrectError(err.message || 'Correction failed');
-    } finally {
-      setCorrecting(false);
-    }
-  };
-
   const openManualCheckInModal = () => {
     setManualFullName('');
     setManualPhone('');
@@ -144,7 +96,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         body: JSON.stringify({
           fullName: manualFullName.trim(),
           ...(manualPhone.trim() ? { phoneNumber: manualPhone.trim() } : {}),
-          ...(manualHostName.trim() ? { hostName: manualHostName.trim() } : {}),
+          hostName: manualHostName.trim(),
         }),
       });
       setShowManualModal(false);
@@ -234,7 +186,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
             >
               <option value="ALL">All Statuses</option>
               <option value="ACTIVE">Currently In Hub</option>
-              <option value="CHECKED_OUT">Checked Out</option>
+              <option value="CHECKED_OUT">Clocked Out</option>
             </select>
 
             <button
@@ -242,10 +194,11 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
               onClick={() => setShowFilters((prev) => !prev)}
               aria-label="Toggle date filters"
               title="Filter attendance records"
-              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg border text-sm font-medium transition flex-shrink-0 ${showFilters || activeFilterCount > 0
-                ? 'border-[#34526E] bg-[#EEF3F7] text-[#1E3A54]'
-                : 'border-[#DCE3EB] bg-white text-[#475569] hover:bg-[#F7F9FB]'
-                }`}
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] rounded-lg border text-sm font-medium whitespace-nowrap transition flex-shrink-0 ${
+                showFilters || activeFilterCount > 0
+                  ? 'border-[#34526E] bg-[#EEF3F7] text-[#1E3A54]'
+                  : 'border-[#DCE3EB] bg-white text-[#475569] hover:bg-[#F7F9FB]'
+              }`}
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span className="hidden sm:inline">Filter</span>
@@ -288,6 +241,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
               <Button
                 type="button"
                 variant="ghost"
+                size="sm"
                 onClick={() => {
                   setStartDate('');
                   setEndDate('');
@@ -305,14 +259,14 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Visitor</th>
-                <th className="px-6 py-3.5">Phone Number</th>
-                <th className="px-6 py-3.5">Here To See</th>
-                <th className="px-6 py-3.5">Day &amp; Date</th>
-                <th className="px-6 py-3.5">Time In</th>
-                <th className="px-6 py-3.5">Time Out</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
+                <th className="px-6 py-4 whitespace-nowrap">Visitor</th>
+                <th className="px-6 py-4 whitespace-nowrap">Phone Number</th>
+                <th className="px-6 py-4 whitespace-nowrap">Here To See</th>
+                <th className="px-6 py-4 whitespace-nowrap">Day &amp; Date</th>
+                <th className="px-6 py-4 whitespace-nowrap">Time In</th>
+                <th className="px-6 py-4 whitespace-nowrap">Time Out</th>
+                <th className="px-6 py-4 whitespace-nowrap">Status</th>
+                <th className="px-6 py-4 whitespace-nowrap text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -331,7 +285,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
               ) : (
                 records.map((item) => (
                   <tr key={item.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
                       <Link
                         href={`${basePath}/visitors/${item.visitor.id}`}
                         className="hover:text-[#34526E]"
@@ -339,48 +293,41 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
                         {item.visitor.fullName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs">{item.visitor.phoneNumber || '—'}</td>
-                    <td className="px-6 py-4 text-[#1F2937]">{item.hostName || '—'}</td>
-                    <td className="px-6 py-4 font-medium text-[#1F2937]">
+                    <td className="px-6 py-4 font-mono text-xs whitespace-nowrap">
+                      {item.visitor.phoneNumber || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-[#1F2937] whitespace-nowrap">
+                      {item.hostName || '—'}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-[#1F2937] whitespace-nowrap">
                       {formatDayAndDate(item.checkIn)}
                     </td>
-                    <td className="px-6 py-4">{formatTime(item.checkIn)}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">{formatTime(item.checkIn)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {item.checkOut ? formatTime(item.checkOut) : '—'}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {item.checkOut ? (
                         <Badge tone="neutral">Clocked Out</Badge>
                       ) : (
                         <Badge tone="success">Active</Badge>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="inline-flex items-center justify-end gap-3">
-                        {!item.checkOut && showManualCheckIn && (
-                          <button
-                            type="button"
-                            disabled={clockingOutId === item.id}
-                            onClick={() => handleManualClockOut(item)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 transition"
-                          >
-                            <LogOut className="w-3.5 h-3.5" />
-                            {clockingOutId === item.id ? 'Clocking out...' : 'Clock Out'}
-                          </button>
-                        )}
-                        {canCorrect && (
-                          <button
-                            type="button"
-                            onClick={() => openCorrectionModal(item)}
-                            className="text-xs font-semibold text-[#34526E] hover:underline"
-                          >
-                            Correct
-                          </button>
-                        )}
-                        {item.checkOut && !canCorrect && (
-                          <span className="text-xs text-[#94A3B8]">—</span>
-                        )}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      {!item.checkOut && showManualCheckIn ? (
+                        <Button
+                          type="button"
+                          variant="warning"
+                          size="sm"
+                          isLoading={clockingOutId === item.id}
+                          onClick={() => handleManualClockOut(item)}
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          {clockingOutId === item.id ? 'Clocking Out...' : 'Clock Out'}
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-[#94A3B8]">—</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -398,81 +345,11 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
         />
       </Card>
 
-      <Modal
-        open={Boolean(correctingRecord)}
-        title={`Correct Attendance: ${correctingRecord?.visitor.fullName || ''}`}
-        onClose={() => setCorrectingRecord(null)}
-      >
-        {correctError && (
-          <div className="p-3 bg-red-50 text-red-700 rounded-xl text-xs font-medium border border-red-200">
-            {correctError}
-          </div>
-        )}
-
-        <form onSubmit={handleCorrectSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-[13px] font-semibold text-[#1F2937]">Check-In Time</label>
-            <input
-              type="datetime-local"
-              required
-              value={checkInInput}
-              onChange={(e) => setCheckInInput(e.target.value)}
-              className="w-full px-3.5 py-2 border border-[#DCE3EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E]"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-[13px] font-semibold text-[#1F2937]">Check-Out Time</label>
-              <label className="inline-flex items-center gap-1.5 text-xs text-[#475569] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={leaveOpen}
-                  onChange={(e) => setLeaveOpen(e.target.checked)}
-                  className="rounded text-[#34526E]"
-                />
-                Still active
-              </label>
-            </div>
-            {!leaveOpen && (
-              <input
-                type="datetime-local"
-                required={!leaveOpen}
-                value={checkOutInput}
-                onChange={(e) => setCheckOutInput(e.target.value)}
-                className="w-full px-3.5 py-2 border border-[#DCE3EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E]"
-              />
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-[13px] font-semibold text-[#1F2937]">Reason</label>
-            <textarea
-              required
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason for correction..."
-              className="w-full px-3.5 py-2 border border-[#DCE3EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#34526E]/20 focus:border-[#34526E]"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E6ECF2]">
-            <Button type="button" variant="secondary" onClick={() => setCorrectingRecord(null)}>
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={correcting}>
-              {correcting ? 'Saving...' : 'Save correction'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
       {/* Staff Manual Clock-In Popup Modal (Receptionist & Super Admin) */}
       <Modal
         open={showManualModal}
         title="Manual Clock In"
-        subtitle="Only Full Name is required. Phone number is optional and works for both new and returning visitors."
+        subtitle="Full Name and who they are here to see are required. Phone number is optional and works for both new and returning visitors."
         onClose={() => setShowManualModal(false)}
       >
         {manualError && (
@@ -501,8 +378,9 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
           />
 
           <Input
-            label="Who are you here to see? (Optional)"
+            label="Who are you here to see?"
             type="text"
+            required
             placeholder="e.g. Mr. Tunde or Operations Desk"
             value={manualHostName}
             onChange={(e) => setManualHostName(e.target.value)}
@@ -518,7 +396,7 @@ export function AttendanceView({ basePath }: { basePath: '/staff' | '/super-admi
               Cancel
             </Button>
             <Button type="submit" isLoading={manualSaving}>
-              {manualSaving ? 'Saving...' : 'Done'}
+              {manualSaving ? 'Clocking In...' : 'Clock In'}
             </Button>
           </div>
         </form>

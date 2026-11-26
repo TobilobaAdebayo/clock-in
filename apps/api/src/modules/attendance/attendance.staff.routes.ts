@@ -23,7 +23,7 @@ const manualCheckInSchema = z.object({
     .refine((val) => !val || (val.length >= 7 && val.length <= 20), {
       message: 'Invalid phone number',
     }),
-  hostName: z.string().trim().max(150).optional(),
+  hostName: z.string().trim().min(1, 'Who they are here to see is required').max(150),
 });
 
 // Staff authentication required

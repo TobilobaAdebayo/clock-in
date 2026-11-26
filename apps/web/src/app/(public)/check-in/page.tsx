@@ -470,9 +470,10 @@ function CheckInFlow() {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
                   <Button
                     type="button"
+                    variant="warning"
                     onClick={handleDirectClockOut}
                     isLoading={loading}
-                    className="w-full sm:w-auto px-10 py-3 min-h-[48px] sm:min-h-[52px] text-base sm:text-lg bg-amber-600 hover:bg-amber-700"
+                    className="w-full sm:w-auto px-10 py-3 min-h-[48px] sm:min-h-[52px] text-base sm:text-lg"
                   >
                     {loading ? 'Clocking Out...' : 'Clock Out'}
                   </Button>

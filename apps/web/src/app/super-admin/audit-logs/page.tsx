@@ -169,11 +169,11 @@ export default function SuperAdminAuditLogsPage() {
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Date &amp; Time</th>
-                <th className="px-6 py-3.5">Actor</th>
-                <th className="px-6 py-3.5">Action</th>
-                <th className="px-6 py-3.5">Type</th>
-                <th className="px-6 py-3.5 text-right">Changes</th>
+                <th className="px-6 py-4 whitespace-nowrap">Date &amp; Time</th>
+                <th className="px-6 py-4 whitespace-nowrap">Actor</th>
+                <th className="px-6 py-4 whitespace-nowrap">Action</th>
+                <th className="px-6 py-4 whitespace-nowrap">Type</th>
+                <th className="px-6 py-4 whitespace-nowrap text-right">Changes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -210,14 +210,15 @@ export default function SuperAdminAuditLogsPage() {
                         <td className="px-6 py-4">
                           <Badge tone="info">{log.recordType}</Badge>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <button
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <Button
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => setExpandedId(isExpanded ? null : log.id)}
-                            className="text-xs font-semibold text-[#34526E] hover:underline"
                           >
                             {isExpanded ? 'Hide' : 'View'}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                       {isExpanded && (

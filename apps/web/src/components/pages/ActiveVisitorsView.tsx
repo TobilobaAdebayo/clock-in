@@ -183,12 +183,12 @@ export function ActiveVisitorsView({ basePath }: { basePath: '/staff' | '/super-
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Visitor</th>
-                <th className="px-6 py-3.5">Phone Number</th>
-                <th className="px-6 py-3.5">Here To See</th>
-                <th className="px-6 py-3.5">Check-In Day</th>
-                <th className="px-6 py-3.5">Check-In Time</th>
-                <th className="px-6 py-3.5 text-right">Profile</th>
+                <th className="px-6 py-4 whitespace-nowrap">Visitor</th>
+                <th className="px-6 py-4 whitespace-nowrap">Phone Number</th>
+                <th className="px-6 py-4 whitespace-nowrap">Here To See</th>
+                <th className="px-6 py-4 whitespace-nowrap">Clock-In Day</th>
+                <th className="px-6 py-4 whitespace-nowrap">Clock-In Time</th>
+                <th className="px-6 py-4 whitespace-nowrap text-right">Profile</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -207,7 +207,7 @@ export function ActiveVisitorsView({ basePath }: { basePath: '/staff' | '/super-
               ) : (
                 filteredActive.map((item) => (
                   <tr key={item.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
                       <Link
                         href={`${basePath}/visitors/${item.visitor.id}`}
                         className="hover:text-[#34526E]"
@@ -215,20 +215,24 @@ export function ActiveVisitorsView({ basePath }: { basePath: '/staff' | '/super-
                         {item.visitor.fullName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs">{item.visitor.phoneNumber || '—'}</td>
-                    <td className="px-6 py-4 text-[#1F2937]">{item.hostName || '—'}</td>
-                    <td className="px-6 py-4 font-medium text-[#1F2937]">
+                    <td className="px-6 py-4 font-mono text-xs whitespace-nowrap">
+                      {item.visitor.phoneNumber || '—'}
+                    </td>
+                    <td className="px-6 py-4 text-[#1F2937] whitespace-nowrap">
+                      {item.hostName || '—'}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-[#1F2937] whitespace-nowrap">
                       {formatDayAndDate(item.checkIn)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Badge tone="success">{formatTime(item.checkIn)}</Badge>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
                       <Link
                         href={`${basePath}/visitors/${item.visitor.id}`}
-                        className="text-xs font-semibold text-[#34526E] hover:underline"
+                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap bg-white border border-[#DCE3EB] hover:bg-[#F7F9FB] text-[#374151] transition"
                       >
-                        View &rarr;
+                        View
                       </Link>
                     </td>
                   </tr>

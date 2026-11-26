@@ -79,7 +79,7 @@ export default function SecurityDeskPage() {
         body: JSON.stringify({
           fullName: fullName.trim(),
           ...(phoneNumber.trim() ? { phoneNumber: phoneNumber.trim() } : {}),
-          ...(hostName.trim() ? { hostName: hostName.trim() } : {}),
+          hostName: hostName.trim(),
         }),
       });
       const visitorName = fullName.trim();
@@ -234,13 +234,13 @@ export default function SecurityDeskPage() {
 
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="warning"
                   isLoading={signingOutId === session.id}
                   onClick={() => handleSignOut(session)}
-                  className="w-full sm:w-auto min-h-[44px] border-amber-200 text-amber-800 hover:bg-amber-50"
+                  className="w-full sm:w-auto min-h-[44px]"
                 >
                   <LogOut className="w-4 h-4" />
-                  {signingOutId === session.id ? 'Clocking out...' : 'Clock Out'}
+                  {signingOutId === session.id ? 'Clocking Out...' : 'Clock Out'}
                 </Button>
               </div>
             ))}
@@ -252,7 +252,7 @@ export default function SecurityDeskPage() {
       <Modal
         open={showSignInModal}
         title="Clock In Visitor"
-        subtitle="Only Full Name is required. Works for both new and returning visitors."
+        subtitle="Full Name and who they are here to see are required. Phone number is optional and works for both new and returning visitors."
         onClose={() => setShowSignInModal(false)}
       >
         {modalError && (
@@ -281,8 +281,9 @@ export default function SecurityDeskPage() {
           />
 
           <Input
-            label="Who are you here to see? (Optional)"
+            label="Who are you here to see?"
             type="text"
+            required
             placeholder="e.g. Mr. Tunde or Operations Desk"
             value={hostName}
             onChange={(e) => setHostName(e.target.value)}

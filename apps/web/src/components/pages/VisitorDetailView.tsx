@@ -132,11 +132,11 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Day &amp; Date</th>
-                <th className="px-6 py-3.5">Here To See</th>
-                <th className="px-6 py-3.5">Time In</th>
-                <th className="px-6 py-3.5">Time Out</th>
-                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-4 whitespace-nowrap">Day &amp; Date</th>
+                <th className="px-6 py-4 whitespace-nowrap">Here To See</th>
+                <th className="px-6 py-4 whitespace-nowrap">Time In</th>
+                <th className="px-6 py-4 whitespace-nowrap">Time Out</th>
+                <th className="px-6 py-4 whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -149,17 +149,19 @@ export function VisitorDetailView({ basePath }: { basePath: '/staff' | '/super-a
               ) : (
                 history.map((record) => (
                   <tr key={record.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
                       {formatDayAndDate(record.checkIn)}
                     </td>
-                    <td className="px-6 py-4 text-[#1F2937]">{record.hostName || '—'}</td>
-                    <td className="px-6 py-4">{formatTime(record.checkIn)}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-[#1F2937] whitespace-nowrap">
+                      {record.hostName || '—'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{formatTime(record.checkIn)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {record.checkOut ? formatTime(record.checkOut) : '—'}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {record.checkOut ? (
-                        <Badge tone="neutral">Completed</Badge>
+                        <Badge tone="neutral">Clocked Out</Badge>
                       ) : (
                         <Badge tone="success">Active</Badge>
                       )}

@@ -116,12 +116,19 @@ describe('SECURITY Role RBAC & Front-Desk Check-In/Out', () => {
     });
   });
 
-  it('allows Security to sign in a visitor with full name only, hides phone numbers in active list, and allows 1-click sign out', async () => {
-    // 1. Name-only sign-in (phone & host optional)
-    const checkInRes = await request(app)
+  it('allows Security to sign in a visitor with full name and host (phone optional), hides phone numbers in active list, and allows 1-click sign out', async () => {
+    // 0. Omitting who they are here to see is rejected with 400
+    const missingHostRes = await request(app)
       .post('/api/v1/attendance/manual-check-in')
       .set('Authorization', `Bearer ${securityToken}`)
       .send({ fullName: 'Chief Guest' });
+    expect(missingHostRes.status).toBe(400);
+
+    // 1. Phone-optional sign-in (fullName + hostName required)
+    const checkInRes = await request(app)
+      .post('/api/v1/attendance/manual-check-in')
+      .set('Authorization', `Bearer ${securityToken}`)
+      .send({ fullName: 'Chief Guest', hostName: 'Operations Desk' });
 
     expect(checkInRes.status).toBe(201);
     expect(checkInRes.body.data.visitor.fullName).toBe('Chief Guest');

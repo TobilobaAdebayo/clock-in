@@ -185,7 +185,7 @@ export function TwoFactorCard() {
 
         {!loadingProfile && twoFactorEnabled && !showDisableForm && (
           <Button
-            variant="secondary"
+            variant="danger"
             onClick={() => {
               setShowDisableForm(true);
               setErrorMessage(null);
@@ -271,7 +271,7 @@ export function TwoFactorCard() {
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               onClick={() => {
                 setSetupData(null);
                 setCode('');

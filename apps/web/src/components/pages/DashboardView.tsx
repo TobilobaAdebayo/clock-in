@@ -227,7 +227,7 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="ACTIVE">Active (In Hub)</option>
-                  <option value="CHECKED_OUT">Checked Out</option>
+                  <option value="CHECKED_OUT">Clocked Out</option>
                 </select>
               </div>
 
@@ -264,12 +264,12 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
           <table className="w-full text-left text-sm text-[#475569]">
             <thead className="bg-[#F9FBFC] border-b border-[#E6ECF2] text-[#6B7A8C] text-[11px] uppercase tracking-wider font-semibold">
               <tr>
-                <th className="px-6 py-3.5">Visitor</th>
-                <th className="px-6 py-3.5">Phone Number</th>
-                <th className="px-6 py-3.5">Here To See</th>
-                <th className="px-6 py-3.5">Day &amp; Date</th>
-                <th className="px-6 py-3.5">Check-In Time</th>
-                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-4 whitespace-nowrap">Visitor</th>
+                <th className="px-6 py-4 whitespace-nowrap">Phone Number</th>
+                <th className="px-6 py-4 whitespace-nowrap">Here To See</th>
+                <th className="px-6 py-4 whitespace-nowrap">Day &amp; Date</th>
+                <th className="px-6 py-4 whitespace-nowrap">Time In</th>
+                <th className="px-6 py-4 whitespace-nowrap">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EEF2F6]">
@@ -288,7 +288,7 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
               ) : (
                 filteredRecentCheckIns.map((item) => (
                   <tr key={item.id} className="hover:bg-[#F9FBFC] transition">
-                    <td className="px-6 py-4 font-semibold text-[#111827]">
+                    <td className="px-6 py-4 font-semibold text-[#111827] whitespace-nowrap">
                       <Link
                         href={`${basePath}/visitors/${item.visitor.id}`}
                         className="hover:text-[#34526E]"
@@ -296,17 +296,19 @@ export function DashboardView({ basePath }: { basePath: '/staff' | '/super-admin
                         {item.visitor.fullName}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 font-mono text-xs text-[#475569]">
+                    <td className="px-6 py-4 font-mono text-xs text-[#475569] whitespace-nowrap">
                       {item.visitor.phoneNumber || '—'}
                     </td>
-                    <td className="px-6 py-4 text-[#1F2937]">{item.hostName || '—'}</td>
-                    <td className="px-6 py-4 font-medium text-[#1F2937]">
+                    <td className="px-6 py-4 text-[#1F2937] whitespace-nowrap">
+                      {item.hostName || '—'}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-[#1F2937] whitespace-nowrap">
                       {formatDayAndDate(item.checkIn)}
                     </td>
-                    <td className="px-6 py-4">{formatTime(item.checkIn)}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">{formatTime(item.checkIn)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {item.checkOut ? (
-                        <Badge tone="neutral">Checked Out</Badge>
+                        <Badge tone="neutral">Clocked Out</Badge>
                       ) : (
                         <Badge tone="success">Active</Badge>
                       )}
