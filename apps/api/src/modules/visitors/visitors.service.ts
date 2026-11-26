@@ -69,43 +69,10 @@ export class VisitorsService {
     };
   }
 
-  /**
-   * Looks up returning visitor by phone number OR full name (for visitors registered without a phone number).
-   */
-  async lookup(identifier: string) {
-    const trimmed = identifier.trim();
-    let visitor = null;
-    let matchedBy: 'phone' | 'name' = 'phone';
-
-    if (looksLikePhoneNumber(trimmed)) {
-      const normalizedPhone = normalizePhoneNumber(trimmed);
-      visitor = await this.repo.findByPhoneNumber(normalizedPhone);
-      matchedBy = 'phone';
-    } else {
-      matchedBy = 'name';
-      const matches = await this.repo.findByFullName(trimmed);
-      if (matches.length > 1) {
-        const phoneLessMatches = matches.filter((v) => !v.phoneNumber);
-        if (phoneLessMatches.length === 1) {
-          visitor = phoneLessMatches[0];
-        } else {
-          throw new BadRequestError(
-            'Multiple visitors are registered under this name. Please enter your phone number or ask the receptionist for assistance.',
-          );
-        }
-      } else if (matches.length === 1) {
-        visitor = matches[0];
-      }
-    }
-
-    if (!visitor) {
-      throw new NotFoundError(
-        matchedBy === 'phone'
-          ? 'No registered visitor found with this phone number. Please register as a new visitor.'
-          : 'No registered visitor found with this name. Please check the spelling or register as a new visitor.',
-      );
-    }
-
+  private async buildLookupCandidate(
+    visitor: { id: string; fullName: string; phoneNumber: string | null },
+    matchedBy: 'phone' | 'name',
+  ) {
     const activeSession = await attendanceService.getActiveSession(visitor.id);
 
     // Privacy: never store plaintext fullName or phoneNumber inside the base64url lookupToken.
@@ -154,6 +121,53 @@ export class VisitorsService {
   }
 
   /**
+   * Looks up returning visitor by phone number OR full name (for visitors registered with or without a phone number).
+   * When multiple profiles share the same name, returns masked candidates so the visitor can select theirs safely.
+   */
+  async lookup(identifier: string) {
+    const trimmed = identifier.trim();
+
+    if (looksLikePhoneNumber(trimmed)) {
+      const normalizedPhone = normalizePhoneNumber(trimmed);
+      const visitor = await this.repo.findByPhoneNumber(normalizedPhone);
+      if (!visitor) {
+        throw new NotFoundError(
+          'No registered visitor found with this phone number. Please register as a new visitor.',
+        );
+      }
+
+      return {
+        multipleMatches: false as const,
+        ...(await this.buildLookupCandidate(visitor, 'phone')),
+      };
+    }
+
+    const matches = await this.repo.findByFullName(trimmed);
+    if (matches.length === 0) {
+      throw new NotFoundError(
+        'No registered visitor found with this name. Please check the spelling or register as a new visitor.',
+      );
+    }
+
+    if (matches.length === 1) {
+      return {
+        multipleMatches: false as const,
+        ...(await this.buildLookupCandidate(matches[0], 'name')),
+      };
+    }
+
+    const candidates = await Promise.all(
+      matches.slice(0, 10).map((v) => this.buildLookupCandidate(v, 'name')),
+    );
+
+    return {
+      multipleMatches: true as const,
+      matchedBy: 'name' as const,
+      matches: candidates,
+    };
+  }
+
+  /**
    * Confirms visitor identity by validating confirmation name against the signed token's HMAC digest.
    */
   async confirm(lookupToken: string, confirmationAnswer: string) {
@@ -163,7 +177,7 @@ export class VisitorsService {
     }>(lookupToken, env.JWT_ACCESS_SECRET);
 
     if (!payload || !payload.visitorId || !payload.nameDigest) {
-      throw new BadRequestError('Invalid or expired lookup session. Please search your phone number again.');
+      throw new BadRequestError('Invalid or expired lookup session. Please search your phone number or full name again.');
     }
 
     const answerDigest = hmacDigest(
